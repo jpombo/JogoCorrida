@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://c123456"]
+
+[ext_resource type="Script" uid="uid://de58ib1kqvuhm" path="res://src/game/gameplay_manager.gd" id="1_manager"]
+[ext_resource type="Script" uid="uid://ddhp5rkemgefr" path="res://src/road/road.gd" id="2_road"]
+[ext_resource type="Script" path="res://src/player/player_vehicle.gd" id="3_vehicle"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_car"]
+size = Vector2(32, 48)
+
+[node name="Gameplay" type="Node2D" unique_id=1278228333]
+script = ExtResource("1_manager")
+
+[node name="Road" type="Node2D" parent="." unique_id=870535707]
+script = ExtResource("2_road")
+
+[node name="PlayerVehicle" type="CharacterBody2D" parent="." unique_id=1707022647]
+script = ExtResource("3_vehicle")
+
+[node name="Sprite2D" type="Sprite2D" parent="PlayerVehicle" unique_id=1432678727]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerVehicle" unique_id=1053086396]
+shape = SubResource("RectangleShape2D_car")
