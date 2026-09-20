@@ -36,6 +36,12 @@ func _process(_delta: float) -> void:
 		# Atualizar scrolling da estrada com velocidade do veículo
 		if player_vehicle:
 			road.update_scroll_speed(player_vehicle.get_speed())
+		
+		# Atualizar limites baseado na posição Y do jogador
+		# Isso permite transições precisas em segmentos de expansão/redução
+		if player_vehicle and road:
+			var boundaries = road.get_boundaries_for_player_y(player_vehicle.position.y)
+			player_vehicle.controller.update_boundaries(boundaries.left, boundaries.right)
 	
 	# Retomar com Escape quando pausado
 	elif game_state.current_state == game_state.State.PAUSED:
