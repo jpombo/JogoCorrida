@@ -42,6 +42,7 @@ func _create_placeholder() -> void:
 
 ## Definir posição inicial
 func _set_initial_position() -> void:
+	# Centralizar o carro na pista
 	position.x = (GameConfig.road_left_boundary + GameConfig.road_right_boundary) / 2.0
 	# Offset para alinhar base do carro com a posição (metade da altura do carro = 24px)
 	position.y = GameConfig.initial_vertical_position * 480.0 - 24.0

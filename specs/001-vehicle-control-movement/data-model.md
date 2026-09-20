@@ -38,20 +38,27 @@ Gerencia lógica de controle — lê inputs, calcula aceleração/frenagem/desac
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| (sem estado próprio) | — | — | — | Stateless — calcula e aplica no PlayerVehicle |
+| speed | float | 0.0 | 0.0 ≤ speed ≤ max_speed | Velocidade atual do veículo |
+| lateral_speed | float | 0.0 | -lateral_max ≤ lat ≤ +lateral_max | Velocidade lateral atual |
+| current_left_boundary | float | 248.0 | pixel_x | Limite esquerdo atual da estrada |
+| current_right_boundary | float | 392.0 | pixel_x | Limite direito atual da estrada |
 
 **Responsibilities**:
 - Ler inputs do sistema Input Map
 - Calcular mudanças de velocidade (aceleração, frenagem, inércia)
 - Calcular movimento lateral
-- Aplicar limites de estrada
+- Aplicar limites dinâmicos da estrada (atualizados via update_boundaries)
 - Atualizar estado do PlayerVehicle
 
 **Methods**:
 - `_process(delta: float)` — Processar inputs e atualizar física
 - `_apply_vertical_physics(delta: float)` — Calcular velocidade vertical
 - `_apply_lateral_physics(delta: float)` — Calcular velocidade lateral
-- `_clamp_position()` — Respeitar limites da estrada
+- `_clamp_position(current_x: float)` — Respeitar limites dinâmicos da estrada
+- `update_boundaries(left: float, right: float)` — Atualizar limites laterais (chamado quando pista muda de tipo)
+- `get_vertical_position() -> float` — Retornar posição Y normalizada baseada na velocidade
+- `get_horizontal_direction() -> float` — Retornar direção lateral (-1.0, 0.0, 1.0)
+- `reset()` — Resetar estado para valores iniciais
 
 ---
 
@@ -61,11 +68,11 @@ Representa a estrada — área válida, limites laterais, preparação para scro
 
 | Field | Type | Default | Constraints | Description |
 |-------|------|---------|-------------|-------------|
-| left_boundary | float | 100.0 | pixel_x | Limite esquerdo da estrada |
-| right_boundary | float | 540.0 | pixel_x | Limite direito da estrada |
+| left_boundary | float | 248.0 | pixel_x | Limite esquerdo da estrada |
+| right_boundary | float | 392.0 | pixel_x | Limite direito da estrada |
 | top_boundary | float | 0.0 | pixel_y | Limite superior (scrolling futuro) |
 | bottom_boundary | float | 600.0 | pixel_y | Limite inferior |
-| road_width | float | 440.0 | Calculado: right - left | Largura da faixa de rodagem |
+| road_width | float | 144.0 | Calculado: right - left | Largura da faixa de rodagem |
 | scroll_offset | float | 0.0 | ≥ 0 | Offset de scrolling (futuro) |
 
 **Relationships**:
@@ -118,8 +125,8 @@ Parâmetros centralizados de configuração — apenas leitura durante gameplay.
 | initial_vertical_position | float | 0.95 | 0.0-1.0 | Posição Y inicial (% da tela) — base do carro alinhada com margem |
 | vertical_position_min | float | 0.60 | 0.0-1.0 | Posição Y mínima (velocidade máxima) — 1 carro abaixo do meio |
 | vertical_position_max | float | 0.95 | 0.0-1.0 | Posição Y máxima (parado) — base com margem de segurança |
-| road_left_boundary | float | 100.0 | pixels | Limite esquerdo da estrada |
-| road_right_boundary | float | 540.0 | pixels | Limite direito da estrada |
+| road_left_boundary | float | 248.0 | pixels | Limite esquerdo da estrada |
+| road_right_boundary | float | 392.0 | pixels | Limite direito da estrada |
 | target_fps | int | 60 | > 0 | Framerate alvo |
 
 **Access Pattern**: Somente leitura durante gameplay. Valores podem ser alterados via editor ou config files antes de iniciar.
@@ -141,8 +148,9 @@ GameState (observa)
 ## Validation Rules
 
 1. **Velocidade**: 0 ≤ speed ≤ max_speed (sempre)
-2. **Posição X**: road_left_boundary ≤ x ≤ road_right_boundary
+2. **Posição X**: (road_left_boundary + half_width) ≤ x ≤ (road_right_boundary - half_width), onde half_width = 16px
 3. **Posição Y**: vertical_position_min ≤ y ≤ vertical_position_max
 4. **Simultaneidade**: brake prevalece sobre accelerate (FR-005A)
 5. **Diagonal**: velocidade total ≤ soma dos componentes (normalização)
 6. **Assets**: fallback para placeholder se sprite não encontrado
+7. **Limites Dinâmicos**: VehicleController atualiza limites via update_boundaries() quando pista muda de tipo

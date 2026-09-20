@@ -7,6 +7,13 @@ var speed: float = 0.0
 ## Velocidade lateral atual
 var lateral_speed: float = 0.0
 
+## Delta do frame atual
+var current_delta: float = 0.0
+
+## Limites laterais atuais da estrada
+var current_left_boundary: float = 248.0
+var current_right_boundary: float = 392.0
+
 ## Se o veículo está em movimento
 var is_moving: bool:
 	get:
@@ -19,6 +26,7 @@ signal boundary_reached(side: String)
 
 ## Processar inputs e atualizar física
 func _process(delta: float) -> void:
+	current_delta = delta
 	_apply_vertical_physics(delta)
 	_apply_lateral_physics(delta)
 	speed_changed.emit(speed)
@@ -57,10 +65,18 @@ func get_horizontal_direction() -> float:
 		return 1.0
 	return 0.0
 
-## Respeitar limites da estrada
+## Respeitar limites da estrada (considerando metade da largura do carro)
 func _clamp_position(current_x: float) -> float:
 	var old_x = current_x
-	current_x = clamp(current_x, GameConfig.road_left_boundary, GameConfig.road_right_boundary)
+	var half_width = 16.0  # Metade da largura do sprite (32px)
+	var min_x = current_left_boundary + half_width
+	var max_x = current_right_boundary - half_width
+	
+	# Se o carro está fora dos novos limites, mover suavemente para dentro
+	if current_x < min_x:
+		current_x = min(current_x + 200.0 * current_delta, min_x)
+	elif current_x > max_x:
+		current_x = max(current_x - 200.0 * current_delta, max_x)
 	
 	if current_x != old_x:
 		var side = "left" if current_x < old_x else "right"
@@ -68,7 +84,14 @@ func _clamp_position(current_x: float) -> float:
 	
 	return current_x
 
+## Atualizar limites da estrada (chamado quando a pista muda de tipo)
+func update_boundaries(left: float, right: float) -> void:
+	current_left_boundary = left
+	current_right_boundary = right
+
 ## Resetar estado para valores iniciais
 func reset() -> void:
 	speed = 0.0
 	lateral_speed = 0.0
+	current_left_boundary = GameConfig.road_left_boundary
+	current_right_boundary = GameConfig.road_right_boundary
