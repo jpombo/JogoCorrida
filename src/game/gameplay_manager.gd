@@ -5,13 +5,23 @@ extends Node2D
 ## Referências
 @onready var road = $Road
 @onready var player_vehicle = $PlayerVehicle
+@onready var background_layer = $BackgroundLayer
 
 ## GameState (autoload)
 var game_state = GameState
 
+## Environment manager
+var environment_manager: EnvironmentManager = EnvironmentManager.new()
+
 func _ready() -> void:
 	# Conectar signals do GameState
 	game_state.state_changed.connect(_on_state_changed)
+	
+	# Configurar ambiente atual
+	environment_manager.set_environment(GameConfig.current_environment_id)
+	var env = environment_manager.get_current_environment()
+	if env:
+		background_layer.set_texture(env.texture_path)
 	
 	# Iniciar no MENU
 	game_state.reset()
@@ -36,6 +46,10 @@ func _process(_delta: float) -> void:
 		# Atualizar scrolling da estrada com velocidade do veículo
 		if player_vehicle:
 			road.update_scroll_speed(player_vehicle.get_speed())
+		
+		# Atualizar scrolling do background
+		if background_layer and road:
+			background_layer.update_scroll(road.scroll_speed, _delta)
 		
 		# Atualizar limites baseado na posição Y do jogador
 		# Isso permite transições precisas em segmentos de expansão/redução

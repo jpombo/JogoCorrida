@@ -37,6 +37,18 @@ extends Node
 @export var road_expanded_2_lanes_path: String = "res://assets/estrada/estrada_2_vias_expandido.png"
 @export var road_reduction_path: String = "res://assets/estrada/estrada_reducao_2_vias.png"
 
+## Ambientes
+@export var current_environment_id: String = "PLAINS"
+@export var background_multiplier: float = 0.6
+
+## Dicionário centralizado de ambientes — cada entrada é um Dictionary com id, display_name, texture_path, difficulty
+var ENVIRONMENTS: Dictionary = {
+	"PLAINS": { "id": "PLAINS", "display_name": "Planície", "texture_path": "res://assets/background/Seamless Pixel Art Grass Texture.png", "difficulty": 1 },
+	"DESERT": { "id": "DESERT", "display_name": "Deserto", "texture_path": "res://assets/background/Pixel Art Desert Sand Texture.png", "difficulty": 2 },
+	"FOREST": { "id": "FOREST", "display_name": "Floresta", "texture_path": "res://assets/background/Pixel Art Forest Floor Texture.png", "difficulty": 3 },
+	"ICE": { "id": "ICE", "display_name": "Gelo", "texture_path": "res://assets/background/Pixel Art Snowy Ice Texture.png", "difficulty": 4 },
+}
+
 ## Sequência de teste da pista (tipos: 0=STRAIGHT, 1=EXPANSION, 2=REDUCTION, 3=EXPANDED_2_LANES)
 ## Formato: [tipo, quantidade]
 @export var test_track_sequence: Array = [

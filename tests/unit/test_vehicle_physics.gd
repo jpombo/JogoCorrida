@@ -1,4 +1,4 @@
-extends GutTest
+extends GdUnitTestSuite
 
 var controller: VehicleController
 
