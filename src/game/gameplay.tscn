@@ -4,6 +4,8 @@
 [ext_resource type="Script" uid="uid://ddhp5rkemgefr" path="res://src/road/road.gd" id="2_road"]
 [ext_resource type="Script" uid="uid://buskerhte4vs" path="res://src/player/player_vehicle.gd" id="3_vehicle"]
 [ext_resource type="Script" uid="uid://cdy50djgq2ukd" path="res://src/environment/background_controller.gd" id="4_background"]
+[ext_resource type="Script" path="res://src/decoration/decoration_manager.gd" id="5_decoration"]
+[ext_resource type="Script" path="res://src/traffic/traffic_manager.gd" id="6_traffic"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_car"]
 size = Vector2(32, 48)
@@ -14,8 +16,14 @@ script = ExtResource("1_manager")
 [node name="BackgroundLayer" type="Node2D" parent="." unique_id=595631673]
 script = ExtResource("4_background")
 
+[node name="DecorationLayer" type="Node2D" parent="." unique_id=595631674]
+script = ExtResource("5_decoration")
+
 [node name="Road" type="Node2D" parent="." unique_id=870535707]
 script = ExtResource("2_road")
+
+[node name="TrafficLayer" type="Node2D" parent="." unique_id=870535708]
+script = ExtResource("6_traffic")
 
 [node name="PlayerVehicle" type="CharacterBody2D" parent="." unique_id=1707022647]
 script = ExtResource("3_vehicle")

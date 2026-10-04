@@ -6,6 +6,8 @@ extends Node2D
 @onready var road = $Road
 @onready var player_vehicle = $PlayerVehicle
 @onready var background_layer = $BackgroundLayer
+@onready var decoration_layer = $DecorationLayer
+@onready var traffic_layer = $TrafficLayer
 
 ## GameState (autoload)
 var game_state = GameState
@@ -13,21 +15,58 @@ var game_state = GameState
 ## Environment manager
 var environment_manager: EnvironmentManager = EnvironmentManager.new()
 
+## Último ambiente propagado aos sistemas (FR-031, T061).
+## A troca de `GameConfig.current_environment_id` em runtime é detectada por
+## comparação a cada quadro — um cheque de string por quadro, sem alloc e sem
+## sinal novo em `EnvironmentManager` (D9: nada escreve em SPEC-003).
+var _ambiente_propagado: String = ""
+
 func _ready() -> void:
 	# Conectar signals do GameState
 	game_state.state_changed.connect(_on_state_changed)
-	
+
 	# Configurar ambiente atual
 	environment_manager.set_environment(GameConfig.current_environment_id)
-	var env = environment_manager.get_current_environment()
-	if env:
-		background_layer.set_texture(env.texture_path)
-	
+
+	# SPEC-004: os dois sistemas recebem sua configuração de GameConfig e ficam
+	# registrados com o ambiente vigente. Nenhum deles escreve em Road, em
+	# PlayerVehicle ou em EnvironmentManager (FR-052, D9, I7).
+	if traffic_layer:
+		traffic_layer.setup(GameConfig.TRAFFIC_CATEGORIES)
+	if decoration_layer:
+		decoration_layer.setup(GameConfig.DECORATION_LIBRARIES)
+
+	_propagar_ambiente(GameConfig.current_environment_id)
+
 	# Iniciar no MENU
 	game_state.reset()
 	_show_menu()
 
+
+## Propaga o ambiente vigente para fundo e decoração (FR-031, T061).
+## Centraliza o que o `_ready` fazia na origem: resolve o ambiente no
+## EnvironmentManager, troca a textura de fundo e avisa a DecorationLayer,
+## que desativa a biblioteca anterior sem resíduo (SC-008, US6/AC1).
+func _propagar_ambiente(id: String) -> void:
+	environment_manager.set_environment(id)
+	var env: EnvironmentData = environment_manager.get_current_environment()
+	if env == null:
+		return
+	if background_layer:
+		background_layer.set_texture(env.texture_path)
+	if decoration_layer:
+		decoration_layer.set_environment(env.id)
+	# Registra o ID SOLICITADO: com id inválido o EnvironmentManager cai no
+	# fallback "PLAINS", e gravar o resolvido faria a comparação por quadro
+	# re-propagá-lo para sempre.
+	_ambiente_propagado = id
+
 func _process(_delta: float) -> void:
+	# FR-031 / T061: troca de ambiente em runtime (ex.: configuração ao vivo)
+	# propaga fundo e biblioteca de decoração sem exigir alteração de código.
+	if GameConfig.current_environment_id != _ambiente_propagado:
+		_propagar_ambiente(GameConfig.current_environment_id)
+
 	# Transição de MENU para READY ao pressionar Enter/Espaço
 	if game_state.current_state == game_state.State.MENU:
 		if Input.is_action_just_pressed("ui_accept"):
@@ -46,11 +85,22 @@ func _process(_delta: float) -> void:
 		# Atualizar scrolling da estrada com velocidade do veículo
 		if player_vehicle:
 			road.update_scroll_speed(player_vehicle.get_speed())
-		
+
 		# Atualizar scrolling do background
 		if background_layer and road:
 			background_layer.update_scroll(road.scroll_speed, _delta)
-		
+
+		# Hierarquia de atualização (FR-055, research.md R9).
+		# Os passos 3 e 4 só podem usar o scroll_speed do quadro corrente, então
+		# rodam depois de road._process, que é interno ao próprio Road.
+		# Decoração antes do trânsito: a decoração reposicionada não pode ser confundida
+		# com veículos na verificação visual de espaçamento (contrato §8).
+		if decoration_layer and road:
+			decoration_layer.update(_delta, road)
+
+		if traffic_layer and road:
+			traffic_layer.update(_delta, road)
+
 		# Atualizar limites baseado na posição Y do jogador
 		# Isso permite transições precisas em segmentos de expansão/redução
 		if player_vehicle and road:

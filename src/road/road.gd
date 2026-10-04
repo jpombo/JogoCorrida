@@ -1,3 +1,4 @@
+class_name Road
 extends Node2D
 
 ## Pool de sprites da estrada

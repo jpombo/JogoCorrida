@@ -1,3 +1,4 @@
+class_name PlayerVehicle
 extends CharacterBody2D
 
 ## Controlador do veículo

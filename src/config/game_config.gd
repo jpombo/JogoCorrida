@@ -57,3 +57,220 @@ var ENVIRONMENTS: Dictionary = {
 	[3, 10],  # 10 segmentos expandidos (2 vias expandidas)
 	[2, 1],   # 1 segmento de redução (4→2 vias)
 ]
+
+# ---------------------------------------------------------------------------
+# SPEC-004 — Sistema de Trânsito e Decoração
+# ---------------------------------------------------------------------------
+
+## Conversão de km/h para as unidades de física do jogo (research.md R2)
+## 100 unidades = 125 km/h, portanto 1 km/h = 0.8 unidades.
+## Ancorar o jogador em 125 km/h mantém GameConfig.max_speed em 100.0,
+## preservando as constantes já calibradas do SPEC-001.
+const KMH_TO_SPEED_UNIT: float = 0.8
+
+## Categorias de veículos de trânsito.
+## Cada entrada vira um TrafficData (src/traffic/traffic_data.gd).
+## `assets` lista os arquivos sem extensão; a pasta é exclusiva da categoria (FR-012).
+## `frequency` é a frequência relativa de spawn e é um parâmetro de ajuste (FR-023).
+var TRAFFIC_CATEGORIES: Dictionary = {
+	"caminhao": {
+		"id": "caminhao",
+		"display_name": "Caminhão",
+		"assets_path": "res://assets/npcs/caminhao/",
+		"assets": ["caminhao_madeireiro"],
+		"max_speed_kmh": 90.0,
+		"frequency": 0.15,
+	},
+	"utilitario": {
+		"id": "utilitario",
+		"display_name": "Utilitário",
+		"assets_path": "res://assets/npcs/utilitario/",
+		"assets": ["Carro-prata", "carro_03", "carro_05", "carro_06", "carro_08", "carro_11", "carro_12"],
+		"max_speed_kmh": 90.0,
+		"frequency": 0.25,
+	},
+	"passeio": {
+		"id": "passeio",
+		"display_name": "Passeio",
+		"assets_path": "res://assets/npcs/passeio/",
+		"assets": ["carro_01", "carro_02", "carro_04", "carro_07", "carro_09", "carro_10"],
+		"max_speed_kmh": 100.0,
+		"frequency": 0.35,
+	},
+	"esporte": {
+		"id": "esporte",
+		"display_name": "Esporte",
+		"assets_path": "res://assets/npcs/esporte/",
+		"assets": ["carro-amarelo", "carro-laranja", "carro-verde"],
+		"max_speed_kmh": 120.0,
+		"frequency": 0.25,
+	},
+}
+
+## Parâmetros de ajuste do trânsito (FR-023). Todos são somente leitura em runtime:
+## a dificuldade do SPEC-008 adjusta frequência, densidade e quantidade, nunca identidade.
+@export var traffic_enabled: bool = true
+@export var traffic_max_vehicles: int = 12
+@export var traffic_spawn_distance: float = 260.0
+@export var traffic_spawn_interval: float = 1.2
+@export var traffic_min_spacing: float = 70.0
+
+## Bibliotecas de decoração por ambiente.
+## Cada entrada vira um DecorationData (src/decoration/decoration_data.gd).
+## `repeatable` é DADO DE CONFIGURAÇÃO, nunca deduzido do nome do arquivo em runtime
+## (research.md R3, constitution v2.0.0 §Independência de Assets, FR-036).
+## `weight` é o PERCENTUAL DE APRESENTAÇÃO do elemento dentro do ambiente, em pontos
+## percentuais que somam 100 por biblioteca: define a chance relativa do elemento
+## nascer quando há mais de um candidato elegível (FR-036, FR-037).
+## Quando um ambiente tem dois assets de árvore, o percentual da árvore é dividido
+## igualmente entre eles (Deserto 73% -> 36.5 + 36.5; Floresta 96% -> 48 + 48).
+## A lista é explícita — `DirAccess` só é usado em modo debug para comparar (R4).
+var DECORATION_LIBRARIES: Dictionary = {
+	"PLAINS": [
+		{ "asset": "planice_arvore01", "repeatable": true, "weight": 80.0 },
+		{ "asset": "planice_casa01", "repeatable": false, "weight": 5.0 },
+		{ "asset": "planice_feno01", "repeatable": false, "weight": 7.0 },
+		{ "asset": "planice_milho", "repeatable": false, "weight": 6.0 },
+		{ "asset": "planice_silo01", "repeatable": false, "weight": 2.0 },
+	],
+	"DESERT": [
+		{ "asset": "deserto_arvore01", "repeatable": true, "weight": 36.5 },
+		{ "asset": "deserto_arvore02", "repeatable": true, "weight": 36.5 },
+		{ "asset": "deserto_cactus", "repeatable": false, "weight": 20.0 },
+		{ "asset": "deserto_duna", "repeatable": false, "weight": 5.0 },
+		{ "asset": "deserto_casa", "repeatable": false, "weight": 2.0 },
+	],
+	"FOREST": [
+		{ "asset": "floresta_arvore01", "repeatable": true, "weight": 48.0 },
+		{ "asset": "floresta_arvore02", "repeatable": true, "weight": 48.0 },
+		{ "asset": "floresta_lago", "repeatable": false, "weight": 3.0 },
+		{ "asset": "floresta_serra", "repeatable": false, "weight": 1.0 },
+	],
+	"ICE": [
+		{ "asset": "gelo_arvore", "repeatable": true, "weight": 96.0 },
+		{ "asset": "gelo_boneco", "repeatable": false, "weight": 3.0 },
+		{ "asset": "gelo_casa01", "repeatable": false, "weight": 1.0 },
+	],
+}
+
+## Pastas de assets de decoração por ambiente.
+## Declaradas explicitamente porque o identificador do ambiente e o nome da pasta não
+## coincidem para PLAINS (`PLAINS` -> `planice`). Derivar a pasta do id exigiria
+## comparação de string em runtime, o que a constitution v2.0.0
+## §Independência de Assets proíbe e research.md R3 descarta.
+var DECORATION_PATHS: Dictionary = {
+	"PLAINS": "res://assets/decoracao/planice/",
+	"DESERT": "res://assets/decoracao/deserto/",
+	"FOREST": "res://assets/decoracao/floresta/",
+	"ICE": "res://assets/decoracao/gelo/",
+}
+
+## Parâmetros de ajuste da decoração (FR-056).
+@export var decoration_enabled: bool = true
+@export var decoration_density: float = 1.0
+@export var decoration_speed_multiplier: float = 0.85
+@export var decoration_spacing_min: float = 90.0
+@export var decoration_spacing_max: float = 180.0
+@export var decoration_depth_count: int = 3
+@export var decoration_depth_spacing: float = 52.0
+@export var decoration_scale: float = 1.0
+@export var decoration_safety_margin: float = 24.0
+@export var decoration_tree_repeat_limit: int = 10
+
+## Agrupamentos de parâmetros expostos ao SPEC-008 (FR-061, data-model.md §8).
+## Somente leitura nesta versão: o SPEC-004 expõe a estrutura, o SPEC-008 resolve a dificuldade.
+## As chaves individuais acima continuam válidas — são uma projeção, não uma substituição.
+var traffic_tuning: Dictionary = {}
+var decoration_tuning: Dictionary = {}
+
+func _ready() -> void:
+	_build_tuning_groups()
+	_verificar_consistencia_de_assets()
+
+
+## R4 / T050 — compara cada lista `assets` com o conteúdo real da pasta.
+## Roda APENAS em build de debug, emite `push_warning` na divergência e nunca
+## participa de lógica de gameplay: é diagnóstico de authoring, não regra de
+## runtime (research.md R4, constitution v2.0.0 §Independência de Assets).
+func _verificar_consistencia_de_assets() -> void:
+	if not OS.is_debug_build():
+		return
+
+	for id in TRAFFIC_CATEGORIES:
+		var entrada: Dictionary = TRAFFIC_CATEGORIES[id]
+		_conferir_pasta(
+			String(entrada.get("assets_path", "")),
+			entrada.get("assets", []) as Array,
+			"trânsito/" + str(id)
+		)
+
+	for ambiente in DECORATION_LIBRARIES:
+		var declarados: Array = []
+		for item in DECORATION_LIBRARIES[ambiente]:
+			declarados.append(String(item.get("asset", "")))
+		_conferir_pasta(
+			String(DECORATION_PATHS.get(ambiente, "")), declarados, "decoração/" + str(ambiente)
+		)
+
+
+## Avisa sobre asset declarado ausente e sobre arquivo não declarado na pasta.
+func _conferir_pasta(pasta: String, declarados: Array, rotulo: String) -> void:
+	if pasta.is_empty():
+		return
+
+	var dir: DirAccess = DirAccess.open(pasta)
+	if dir == null:
+		push_warning("[SPEC-004] %s: pasta inacessível '%s'" % [rotulo, pasta])
+		return
+
+	var reais: Array[String] = []
+	dir.list_dir_begin()
+	var nome: String = dir.get_next()
+	while not nome.is_empty():
+		if not dir.current_is_dir() and _e_png(nome):
+			reais.append(nome.get_basename())
+		nome = dir.get_next()
+	dir.list_dir_end()
+
+	for esperado in declarados:
+		if not reais.has(String(esperado)):
+			push_warning(
+				"[SPEC-004] %s: declarado '%s' não existe em %s" % [rotulo, esperado, pasta]
+			)
+
+	for encontrado in reais:
+		if not declarados.has(encontrado):
+			push_warning(
+				"[SPEC-004] %s: '%s' existe em %s mas não está em `assets`"
+				% [rotulo, encontrado, pasta]
+			)
+
+
+## Só PNG conta como asset: `.import` e `.uid` acompanham o arquivo declarado.
+func _e_png(nome: String) -> bool:
+	return nome.get_extension().to_lower() == "png"
+
+
+func _build_tuning_groups() -> void:
+	traffic_tuning = {
+		"traffic_enabled": traffic_enabled,
+		"traffic_max_vehicles": traffic_max_vehicles,
+		"traffic_spawn_distance": traffic_spawn_distance,
+		"traffic_spawn_interval": traffic_spawn_interval,
+		"traffic_min_spacing": traffic_min_spacing,
+	}
+	for id in TRAFFIC_CATEGORIES:
+		traffic_tuning["traffic_frequency_" + id] = TRAFFIC_CATEGORIES[id]["frequency"]
+
+	decoration_tuning = {
+		"decoration_enabled": decoration_enabled,
+		"decoration_density": decoration_density,
+		"decoration_speed_multiplier": decoration_speed_multiplier,
+		"decoration_spacing_min": decoration_spacing_min,
+		"decoration_spacing_max": decoration_spacing_max,
+		"decoration_depth_count": decoration_depth_count,
+		"decoration_depth_spacing": decoration_depth_spacing,
+		"decoration_scale": decoration_scale,
+		"decoration_safety_margin": decoration_safety_margin,
+		"decoration_tree_repeat_limit": decoration_tree_repeat_limit,
+	}

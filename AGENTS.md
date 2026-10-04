@@ -2,9 +2,19 @@
 
 ## What this is
 
-JogoCorrida ("racing game") is a **spec-kit / Specify spec-driven development (SDD) project**. There is no application code yet — work happens as a written pipeline: `spec → plan → tasks → implement`. Don't look for build/test/lint commands; there is no toolchain (no package.json, no src/) and none should be invented.
+JogoCorrida ("racing game") is a **spec-kit / Specify spec-driven development (SDD) project** built on **Godot 4.7.2** (GDScript). Features are developed through the written pipeline `spec → plan → tasks → implement`, and the resulting GDScript code lives in `src/`. The whole workflow is driven by `/speckit.*` commands (opencode integration, `.` separator), e.g. `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`.
 
-The whole workflow is driven by `/speckit.*` commands (opencode integration, `.` separator), e.g. `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`.
+## Estado atual
+
+Specs concluídas e implementadas: **SPEC-001** (controle do veículo), **SPEC-002** (estrada e scrolling), **SPEC-003** (ambientes), **SPEC-004** (trânsito e decoração) — 13 suítes de teste, 112 casos verdes.
+
+## Build & test
+
+- Engine: `Godot_v4.7.2-stable_linux.x86_64` (binário em `~/Downloads/_installers/`); a cena principal é `res://src/game/gameplay.tscn`.
+- Testes: GdUnit4 em `tests/unit/`. Rodar a suíte completa (o runner sai com **exit 101** quando está tudo verde):
+  `GODOT_BIN=<caminho do godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit`
+- `*.import` é ignorado pelo git: abra o editor Godot uma vez por máquina antes dos testes headless, para gerar os imports dos assets.
+- `tools/resize_decoration_assets.py` é um **validador somente leitura** dos assets de decoração (nomes, alturas da SC-027, proporção, pesos somando 100) — nunca escreve arquivos.
 
 ## Golden rule
 
@@ -31,7 +41,7 @@ The spec is written for **business stakeholders**, not developers:
 
 ## Constitution
 
-`.specify/memory/constitution.md` is currently an **unfilled template** (all `[PLACEHOLDER]` tokens). It should be filled in via `/speckit.constitution` before meaningful work. While it remains a template, `/speckit.analyze` and `/speckit.converge` skip constitution checks gracefully — so don't treat placeholders as real constraints.
+`.specify/memory/constitution.md` is **filled in** (v2.0.0) and is **non-negotiable**. Violations of its MUST principles are CRITICAL findings in `/speckit.analyze` and must be resolved by amending the constitution via `/speckit.constitution` or by changing the spec/plan/tasks — never by reinterpreting the principle. Note: the constitution itself is written in English, which contradicts its own §VI (documentation in pt-BR); flag this if a spec touches it.
 
 ## tasks.md format
 
