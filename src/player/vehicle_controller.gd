@@ -7,6 +7,16 @@ var speed: float = 0.0
 ## Velocidade lateral atual
 var lateral_speed: float = 0.0
 
+## Fator de controle lateral vigente (SPEC-005, contrato consumed_apis §3).
+## 1.0 = controle pleno; o DriftState reduz e recupera gradualmente (FR-013/014).
+## Inerte por padrão: sem colisão, o comportamento é idêntico ao SPEC-001 (FR-034).
+var control_factor: float = 1.0
+
+## Tempo restante em que a aceleração é desconsiderada (ajuste 4 da SPEC-005).
+## Armando na colisão; enquanto > 0, segurar "accelerate" aplica apenas a
+## desaceleração natural — a frenagem continua válida. Inerte em 0.0 (FR-034).
+var aceleracao_bloqueada: float = 0.0
+
 ## Delta do frame atual
 var current_delta: float = 0.0
 
@@ -27,25 +37,35 @@ signal boundary_reached(side: String)
 ## Processar inputs e atualizar física
 func _process(delta: float) -> void:
 	current_delta = delta
+	if aceleracao_bloqueada > 0.0:
+		aceleracao_bloqueada = max(aceleracao_bloqueada - delta, 0.0)
 	_apply_vertical_physics(delta)
 	_apply_lateral_physics(delta)
 	speed_changed.emit(speed)
 
 ## Calcular física vertical (aceleração, frenagem, inércia)
 func _apply_vertical_physics(delta: float) -> void:
-	if Input.is_action_pressed("accelerate") and not Input.is_action_pressed("brake"):
+	if (
+		Input.is_action_pressed("accelerate")
+		and not Input.is_action_pressed("brake")
+		and aceleracao_bloqueada <= 0.0
+	):
 		speed = min(speed + GameConfig.acceleration * delta, GameConfig.max_speed)
 	elif Input.is_action_pressed("brake"):
 		speed = max(speed - GameConfig.brake_force * delta, 0.0)
 	else:
 		speed = max(speed - GameConfig.natural_deceleration * delta, 0.0)
 
-## Calcular física lateral (independente do vertical)
+## Calcular física lateral (independente do vertical).
+## A resposta é multiplicada por `control_factor` (SPEC-005): durante o drift
+## o jogador mantém controle parcial, nunca zero (FR-013).
 func _apply_lateral_physics(delta: float) -> void:
+	var aceleracao: float = GameConfig.lateral_acceleration * control_factor
+	var teto: float = GameConfig.lateral_speed * control_factor
 	if Input.is_action_pressed("move_left"):
-		lateral_speed = max(lateral_speed - GameConfig.lateral_acceleration * delta, -GameConfig.lateral_speed)
+		lateral_speed = max(lateral_speed - aceleracao * delta, -teto)
 	elif Input.is_action_pressed("move_right"):
-		lateral_speed = min(lateral_speed + GameConfig.lateral_acceleration * delta, GameConfig.lateral_speed)
+		lateral_speed = min(lateral_speed + aceleracao * delta, teto)
 	else:
 		if lateral_speed > 0:
 			lateral_speed = max(lateral_speed - GameConfig.lateral_deceleration * delta, 0.0)
@@ -93,5 +113,7 @@ func update_boundaries(left: float, right: float) -> void:
 func reset() -> void:
 	speed = 0.0
 	lateral_speed = 0.0
+	control_factor = 1.0
+	aceleracao_bloqueada = 0.0
 	current_left_boundary = GameConfig.road_left_boundary
 	current_right_boundary = GameConfig.road_right_boundary

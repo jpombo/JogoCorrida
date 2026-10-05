@@ -102,10 +102,69 @@ func update(delta: float, road: Road) -> void:
 	if velocidade <= 0.0 or not _habilitado:
 		return
 
-	_cronometro_spawn += delta
-	if _cronometro_spawn >= GameConfig.traffic_spawn_interval:
+	# Densidade alvo (ajuste 3/4): a meta é manter ao menos `traffic_min_visible`
+	# NPCs NA ESTRADA (na tela ou a poucos pixels acima dela, já em aproximação
+	# — a faixa `-MARGEM_PISTA..base` conta os que o jogador verá em ~2 s);
+	# o teto da dificuldade limita os ATIVOS (visíveis + a caminho), porque
+	# todo ativo acaba entrando na tela — só assim o máximo de visíveis é
+	# garantido. Abaixo do mínimo a reposição é imediata (um por quadro,
+	# nascendo logo acima da tela — esteira contínua, sem lote nem seca);
+	# no fluxo normal vale o intervalo configurado.
+	var na_pista: int = _contar_na_pista()
+	var minimo: int = GameConfig.traffic_min_visible
+	var maximo: int = _maximo_visivel_atual()
+
+	if active_vehicles.size() >= maximo:
 		_cronometro_spawn = 0.0
-		_tentar_spawn(road)
+	elif na_pista <= minimo:
+		_cronometro_spawn = 0.0
+		_tentar_spawn(road, true)
+	else:
+		_cronometro_spawn += delta
+		if _cronometro_spawn >= GameConfig.traffic_spawn_interval:
+			_cronometro_spawn = 0.0
+			_tentar_spawn(road, false)
+
+
+## Margem acima do topo da tela que já conta como "na estrada" para a meta de
+## densidade: cobre a latência de aproximação dos recém-nascidos.
+const MARGEM_PISTA: float = 60.0
+
+
+## NPCs já na tela ou entrando por cima, dentro da margem de aproximação.
+func _contar_na_pista() -> int:
+	var n: int = 0
+	for v in active_vehicles:
+		if v.category == null:
+			continue
+		var meia_y: float = v.category.size.y * 0.5
+		if v.position.y + meia_y >= -MARGEM_PISTA:
+			n += 1
+	return n
+
+
+## NPCs com pelo menos um pixel na área visível agora.
+func _contar_visiveis() -> int:
+	var vista: Rect2 = _retangulo_de_visao()
+	var n: int = 0
+	for v in active_vehicles:
+		if v.category == null:
+			continue
+		var meia: Vector2 = v.category.size * 0.5
+		if (
+			v.position.y + meia.y >= vista.position.y and v.position.y - meia.y <= vista.end.y
+			and v.position.x + meia.x >= vista.position.x and v.position.x - meia.x <= vista.end.x
+		):
+			n += 1
+	return n
+
+
+## Máximo de NPCs visíveis para a dificuldade do ambiente corrente.
+## Sem correspondência configurada, cai no próprio `traffic_min_visible`.
+func _maximo_visivel_atual() -> int:
+	var ambiente: Dictionary = GameConfig.ENVIRONMENTS.get(GameConfig.current_environment_id, {})
+	var dificuldade: int = int(ambiente.get("difficulty", 1))
+	return int(GameConfig.traffic_max_visible_by_difficulty.get(dificuldade, GameConfig.traffic_min_visible))
 
 
 ## Habilita ou desabilita o spawn (FR-024, T041).
@@ -155,7 +214,7 @@ var active_vehicles_snapshot: Array[TrafficVehicle]:
 # Spawn
 # ---------------------------------------------------------------------------
 
-func _tentar_spawn(road: Road) -> void:
+func _tentar_spawn(road: Road, em_enchimento: bool = false) -> void:
 	# I1 / FR-005: nunca acima do limite configurado.
 	if active_vehicles.size() >= GameConfig.traffic_max_vehicles:
 		return
@@ -165,7 +224,17 @@ func _tentar_spawn(road: Road) -> void:
 		return
 
 	# I3: nasce acima da área visível, com folga igual à própria altura.
-	var y: float = -categoria.size.y - GameConfig.traffic_spawn_distance
+	# Em enchimento, a faixa é curta e logo acima da tela (reposição rápida);
+	# no fluxo normal, a faixa de distância com variância dessincroniza os
+	# births para evitar saídas em bloco depois (o "lote" do ajuste 3/4).
+	var y: float
+	if em_enchimento:
+		y = -categoria.size.y - GameConfig.traffic_spawn_fill_distance
+	else:
+		y = (
+			-categoria.size.y - GameConfig.traffic_spawn_distance
+			- randf() * GameConfig.traffic_spawn_distance_variance
+		)
 
 	# FR-014 / I2: valida a faixa livre NA ALTURA DE CRIAÇÃO, não na do jogador.
 	var bounds: Dictionary = road.get_boundaries_for_player_y(y)
@@ -175,11 +244,19 @@ func _tentar_spawn(road: Road) -> void:
 		return
 
 	# FR-019: espaçamento longitudinal verificado antes de criar.
-	if _espaco_longo_insuficiente(y):
+	# EXCEÇÃO (ajuste 3/4): abaixo do mínimo visível o birth é invisível e a
+	# separação retangular de 12 px já impede sobreposição — checar os 70 px
+	# aqui transformaria o enchimento num gargalo de ~2,5 s por birth.
+	if not em_enchimento and _espaco_longo_insuficiente(y):
 		return
 
 	var veiculo: TrafficVehicle = _obter_do_pool()
-	var lane: float = min_x + (max_x - min_x) * randf()
+	# Faixa reservada da velocidade (ajuste 5): valida a separação retangular
+	# e a ordenação do corredor; sem faixa livre, adia o spawn (o cronômetro já
+	# foi zerado).
+	var lane: float = _sortear_faixa_separada(categoria, y, min_x, max_x)
+	if lane < 0.0:
+		return
 	veiculo.activate(categoria, lane, y)
 	veiculo.position.x = lane
 	veiculo.previous_right_boundary = bounds.get("right", 0.0)
@@ -246,6 +323,80 @@ func _espaco_longo_insuficiente(y: float) -> bool:
 		if absf(v.position.y - y) < minimo:
 			return true
 	return false
+
+
+## Faixa reservada da categoria (ajuste 5): cada velocidade distinta ocupa uma
+## faixa fixa da pista — mais rápido à esquerda, mais lento à direita (regra de
+## trânsito). Faixas distintas ficam com as projeções laterais separadas
+## (`traffic_min_separation` de folga), então velocidades diferentes nunca
+## compartilham um corredor: o comboio vira estruturalmente impossível e as
+## categorias lentas nascem toda vez que a própria faixa está livre, sem
+## starving (FR-007, FR-019, FR-023).
+func _slot_da_categoria(categoria: TrafficData, min_x: float, max_x: float) -> float:
+	var distintas: Array[float] = []
+	for id in categories:
+		var velocidade: float = categories[id].max_speed
+		if not distintas.has(velocidade):
+			distintas.append(velocidade)
+	distintas.sort()
+	if distintas.size() <= 1:
+		return (min_x + max_x) * 0.5
+	# Índice 0 = mais rápido = extremo esquerdo da pista.
+	var ordem: int = distintas.size() - 1 - distintas.find(categoria.max_speed)
+	return min_x + (max_x - min_x) * float(ordem) / float(distintas.size() - 1)
+
+
+## Devolve a faixa da categoria, ou -1 se ela não respeitar a separação mínima
+## dos ativos ou a ordenação de velocidades do corredor (spawn adiado).
+func _sortear_faixa_separada(categoria: TrafficData, y: float, min_x: float, max_x: float) -> float:
+	var lane: float = _slot_da_categoria(categoria, min_x, max_x)
+	if not _separacao_respeitada(categoria, lane, y):
+		return -1.0
+	if not _ordenacao_valida(categoria, lane, y):
+		return -1.0
+	return lane
+
+
+## Ajuste 5 — ordenação de velocidades na coluna (FR-007, FR-019):
+## num corredor (projeções laterais intersectadas) as categorias ficam ordenadas
+## de baixo para cima (lentos embaixo, rápidos em cima). O recém-nascido ocupa o
+## topo da coluna, então ele só nasce se:
+##   - não houver ninguém ACIMA dele mais lento (quem nasce depois, mais rápido,
+##     o alcançaria e o dois travariam na taxa do mais lento); nem
+##   - ninguém ABAIXO mais rápido (o nascedo o alcançaria e os dois travariam).
+## Com colunas ordenadas, na descida cada veículo sai do ecrã na taxa da própria
+## categoria (caminhão a ≥ 28 px/s com o jogador no máximo) — era isso que o
+## comboio apagava (caminhão colado no esporte, saindo a 4 px/s).
+func _ordenacao_valida(categoria: TrafficData, x: float, y: float) -> bool:
+	var vel_nova: float = categoria.max_speed
+	for v in active_vehicles:
+		if v.category == null:
+			continue
+		var folga_x: float = absf(v.position.x - x) - (v.category.size.x + categoria.size.x) * 0.5
+		if folga_x >= 0.0:
+			continue  # corredor distinto: ordenação não se aplica
+		var vel_v: float = v.get_speed()
+		if v.position.y < y and vel_v < vel_nova:
+			return false  # acima e mais lento
+		if v.position.y > y and vel_v > vel_nova:
+			return false  # abaixo e mais rápido
+	return true
+
+
+## Verdadeiro quando o retângulo do novo veículo em (`x`, `y`) fica a pelo
+## menos `traffic_min_separation` da borda de cada veículo ativo, nos dois
+## eixos somados: separado em X OU em Y. Só falha se os retângulos se
+## aproximam/abrem simultaneamente nos dois sentidos.
+func _separacao_respeitada(categoria: TrafficData, x: float, y: float) -> bool:
+	var s: float = GameConfig.traffic_min_separation
+	for v in active_vehicles:
+		if v.category == null:
+			continue
+		var folga_x: float = absf(v.position.x - x) - (v.category.size.x + categoria.size.x) * 0.5
+		var folga_y: float = absf(v.position.y - y) - (v.category.size.y + categoria.size.y) * 0.5
+		if folga_x < s and folga_y < s:
+			return false
+	return true
 
 
 func _obter_do_pool() -> TrafficVehicle:
@@ -321,13 +472,26 @@ func _cmp_menor_y(a: int, b: int) -> bool:
 
 ## Índice do veículo mais próximo na direção `para_baixo` do movimento — o
 ## líder que impõe o espaçamento longitudinal mínimo (FR-019, SC-006).
+##
+## O líder precisa estar NO MESMO CORREDOR: as projeções laterais dos dois
+## veículos precisam se INTERSECTAR (`folga_x < 0`). Pares lado a lado, mesmo
+## com folga lateral de 1 px, nunca se sobrepõem em Y e por isso não podem ser
+## acoplados — sem essa regra, colunas vizinhas herdavam a velocidade umas das
+## outras (ajuste 5: caminhão saindo na taxa do esporte).
 func _lider_mais_proximo(i: int, y0: float, para_baixo: bool) -> int:
 	var melhor: int = -1
 	var menor_gap: float = INF
+	var vi: TrafficVehicle = active_vehicles[i]
+	var meia_i: float = vi.category.size.x * 0.5 if vi.category != null else 0.0
 	for j in active_vehicles.size():
 		if j == i:
 			continue
-		var gap: float = active_vehicles[j].position.y - y0
+		var vj: TrafficVehicle = active_vehicles[j]
+		var meia_j: float = vj.category.size.x * 0.5 if vj.category != null else 0.0
+		var folga_x: float = absf(vj.position.x - vi.position.x) - (meia_i + meia_j)
+		if folga_x >= 0.0:
+			continue  # corredor distinto: não é líder deste veículo
+		var gap: float = vj.position.y - y0
 		if para_baixo:
 			if gap > 0.0 and gap < menor_gap:
 				menor_gap = gap
@@ -336,6 +500,25 @@ func _lider_mais_proximo(i: int, y0: float, para_baixo: bool) -> int:
 			menor_gap = -gap
 			melhor = j
 	return melhor
+
+
+## Espaçamento longitudinal mínimo centro-a-centro entre `i` e `lider`:
+## nunca menor que `traffic_min_spacing`, mas sempre grande o bastante para as
+## alturas dos dois veículos mais `traffic_min_separation` de folga — senão o
+## limitador permite grudar (caminhão de 128 px fechando para 70 px de centros
+## = 26 px de sobreposição; ajuste 5).
+func _espaco_min_centros(i: int, lider: int) -> float:
+	var meias: float = 0.0
+	var vi: TrafficVehicle = active_vehicles[i]
+	var vl: TrafficVehicle = active_vehicles[lider]
+	if vi.category != null:
+		meias += vi.category.size.y * 0.5
+	if vl.category != null:
+		meias += vl.category.size.y * 0.5
+	return maxf(
+		GameConfig.traffic_min_spacing,
+		meias + GameConfig.traffic_min_separation
+	)
 
 
 ## Move o veículo `i` limitando o fechamento para nunca invadir
@@ -357,13 +540,13 @@ func _mover_com_limite(i: int, delta: float, velocidade: float, road: Road, padr
 		if lider >= 0:
 			limite = (
 				_y_futuro[lider] - y0
-				- GameConfig.traffic_min_spacing - FOLGA_ESPACAMENTO
+				- _espaco_min_centros(i, lider) - FOLGA_ESPACAMENTO
 			)
 	elif dy < 0.0:
 		var lider: int = _lider_mais_proximo(i, y0, false)
 		if lider >= 0:
 			limite = (
-				GameConfig.traffic_min_spacing + FOLGA_ESPACAMENTO
+				_espaco_min_centros(i, lider) + FOLGA_ESPACAMENTO
 				- (y0 - _y_futuro[lider])
 			)
 

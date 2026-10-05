@@ -304,6 +304,21 @@ Um dublê com `get_boundaries_for_player_y()` devolvendo largura 144.0 simula 2 
 
 ---
 
+## Parte 6 — Ajustes pós-implementação (2026-10-05)
+
+Ajustes de comportamento do trânsito pedidos durante o aceite manual da SPEC-005 (T067–T072; ver clarificações de 2026-10-05, FR-019/FR-023 emendados, FR-063/FR-064, FR-065, SC-006/SC-028/SC-029/SC-030 na spec).
+
+| Ajuste | Verificação manual | Verificação automatizada |
+|---|---|---|
+| Ao menos 3 veículos junto ao jogador, sem lotes; teto 5 visíveis (Gelo) | Ultrapassar o último NPC da tela: outro entra logo em seguida, sem seca de segundos (SC-028) | `test_traffic_density.gd` — mínimo visível sustentado (seca < 5%), teto do Gelo ≤ 5, teto vem da configuração do ambiente |
+| Separação no nascimento | Nenhum NPC nasce sobreposto/colado a outro (FR-019) | `test_traffic_separation.gd` — separação retangular no birth; `test_traffic_manager.gd` › `test_no_immediate_overlap_after_spawn` (contrato atualizado) |
+| Velocidades por corredor | Carro mais rápido em outra faixa ultrapassa o mais lento normalmente (SC-029) | `test_traffic_separation.gd` › `test_faster_vehicle_is_not_blocked_by_slower_one_in_another_lane`; `test_memory_stability.gd` (invariante SC-006 por corredor) |
+| Travamento entre categorias: faixas por velocidade, corredor = interseção e espaçamento size-aware | Caminhão com jogador no máximo sai da tela na própria taxa (não preso no esporte); cada categoria na sua faixa (SC-030) | `test_traffic_speed_ordering.gd` — colunas ordenadas + caminhão livre na taxa da categoria em 2 min; separação size-aware durante o movimento; `test_memory_stability.gd` (corredor = projeções intersectadas) |
+
+Suíte completa após os 6 ajustes (o 6º, de retorno do NPC à faixa, é da SPEC-005): **24 suítes, 160 casos, 0 falhas** (exit 101).
+
+---
+
 ## Notas de diagnóstico
 
 | Sintoma | Causa provável | Onde olhar |
@@ -314,3 +329,4 @@ Um dublê com `get_boundaries_for_player_y()` devolvendo largura 144.0 simula 2 
 | Escada de objetos ao jogar 10 minutos | `deactivate()` não sendo chamado; apenas ocultando | Invariantes D4 e I5 |
 | `esporte` nunca ultrapassado | Margem de 4% muito pequena para a percepção do jogador | Ver caso de borda "Margem estreita" e FR-008 |
 | Biblioteca vazia em tela | Caminho do asset incorreto em `GameConfig` | `decoration_manager.setup()` |
+| Teste esporádico falhando com "salto" (caminhão com dy negativo enorme, salto lateral de 64–116 px, pool "nada reciclado") | **Reciclagem do pool no mesmo quadro**: a mesma instância é desativada e reativada entre duas medições e o teste enxerga a troca como continuidade da mesma identidade | Guards de continuidade: salto `< −16 px` em `test_traffic_speed_ordering.gd`, invalidação de baseline pelo sinal `element_recycled` em `test_decoration_manager.gd`, guarda análoga de `delta_y >= 0` em `test_sc026_spacing_between_same_depth_elements` e contagem por evento em `test_recycles_by_any_border` |

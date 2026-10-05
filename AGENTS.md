@@ -6,7 +6,11 @@ JogoCorrida ("racing game") is a **spec-kit / Specify spec-driven development (S
 
 ## Estado atual
 
-Specs concluídas e implementadas: **SPEC-001** (controle do veículo), **SPEC-002** (estrada e scrolling), **SPEC-003** (ambientes), **SPEC-004** (trânsito e decoração) — 13 suítes de teste, 112 casos verdes.
+Specs concluídas e implementadas: **SPEC-001** (controle do veículo), **SPEC-002** (estrada e scrolling), **SPEC-003** (ambientes), **SPEC-004** (trânsito e decoração), **SPEC-005** (colisão e drift) — 24 suítes de teste, 160 casos verdes (exit 101).
+
+- A SPEC-005 passou por **6 ajustes pós-implementação** (aceite manual, 2026-10-05): ajustes 1–3 e 5 de domínio do trânsito (registrados no spec da SPEC-004: separação no nascimento, corredor lateral, densidade mínima, faixas por velocidade) e ajustes 4 e 6 da SPEC-005 (bloqueio da aceleração pós-colisão — FR-036/SC-013; retorno do NPC à faixa após a ultrapassagem — FR-019/FR-021/SC-014). Todos validados na suíte completa; registro em `tasks.md` Phase 13 de cada spec.
+- 2026-10-05: corrigidos dois testes instáveis (flaky) causados por **reciclagem do pool no mesmo quadro** (mesma instância desativada e reativada entre medições): guarda de salto no eixo Y em `test_traffic_speed_ordering.gd` e invalidação de baseline pelo sinal `element_recycled` em `test_decoration_manager.gd`. Suíte completa verde em 12 execuções consecutivas.
+- **Próxima feature planejada**: colisão NPC↔NPC (o NPC de baixo muda de pista), a iniciar com `/speckit.specify` após confirmação do usuário.
 
 ## Build & test
 

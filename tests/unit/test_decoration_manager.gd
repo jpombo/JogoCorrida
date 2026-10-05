@@ -131,14 +131,19 @@ func test_birth_happens_above_visible_area() -> void:
 
 
 ## T024 / D4 — reciclagem por qualquer borda, sem acumular objeto.
+## A prova é por EVENTO (sinal `element_recycled`), não por snapshot final:
+## com reuso imediato do pool o estado pode terminar saturado (todos os nós
+## ativos) mesmo com reciclamento acontecendo — snapshot era flaky.
 func test_recycles_by_any_border() -> void:
+	var conta: Array = [0]
+	manager.element_recycled.connect(func(_e: DecorationElement) -> void: conta[0] += 1)
 	_rodar(120.0)
 	assert_int(manager.pool_size).is_greater(0).override_failure_message(
 		"D4: pool nunca foi criado"
 	)
-	assert_int(manager.active_count).is_less(
-		manager.pool_size
-	).override_failure_message("D4: nada foi reciclado em 120 s")
+	assert_int(conta[0]).is_greater(0).override_failure_message(
+		"D4: nenhum elemento saiu da tela e foi reciclado em 120 s"
+	)
 	assert_int(manager.active_count).is_less_equal(
 		40
 	).override_failure_message("SC-010: elementos ativos sem limite")
@@ -285,12 +290,23 @@ func test_continuous_reposition_when_road_narrows() -> void:
 	# fazia o teste falhar sempre que o primeiro da lista era da ESQ: o
 	# deslocamento dele já tinha acontecido no update do laço anterior.
 	var acompanhados: Dictionary = {}  # elemento -> x do quadro anterior
+	var reposicionados: Dictionary = {}
 	for elem in manager.active_elements:
 		if elem.side == DIR:
 			acompanhados[elem] = elem.position.x
 
+	# Reciclagem no mesmo quadro (desativa + reativação da mesma instância no
+	# pool) invalida a linha de base: sem esta invalidação, o quadro seguinte
+	# compararia o x do elemento antigo com o do novo nascimento e contaria um
+	# "salto" falso de ~64–116 px (mesma instância, novo nascimento — SC-026
+	# já tratava o caso análogo no eixo Y).
+	manager.element_recycled.connect(
+		func(e: DecorationElement) -> void:
+			acompanhados.erase(e)
+			reposicionados.erase(e)
+	)
+
 	var maior_passo: float = 0.0
-	var reposicionados: Dictionary = {}
 	for quadro in 10:
 		manager.update(1.0 / 60.0, road)
 		for elemento in acompanhados.keys():

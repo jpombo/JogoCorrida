@@ -333,13 +333,13 @@ func test_continuous_reposition_when_narrowing() -> void:
 	).override_failure_message("I2: veículo ficou fora da faixa estreita")
 
 
-## T019 / FR-019, SC-006 — todo veículo recém-nascido mantém o espaçamento
-## longitudinal mínimo em relação a todos os demais ativos.
+## T019 / FR-019, SC-006 — todo veículo recém-nascido mantém separação dos
+## demais ativos. No fluxo normal é o espaçamento longitudinal de 70 px;
+## durante o enchimento (ajuste 3/4: reposição imediata abaixo do mínimo
+## visível), o birth é invisível e vale a separação retangular
+## `traffic_min_separation` — nunca sobreposição.
 func test_no_immediate_overlap_after_spawn() -> void:
 	_trocar_road(FakeRoad.new())
-	# 60 s de corrida com o jogador na velocidade máxima. Com 80 px/s a categoria
-	# de 100 km/h empatava com a estrada, ficava parada na linha de criação e
-	# travava o espaçamento (FR-019) para sempre — nascimentos dependiam da sorte.
 	road.scroll_speed = GameConfig.max_speed
 
 	var conhecidos: Array = []
@@ -354,14 +354,23 @@ func test_no_immediate_overlap_after_spawn() -> void:
 			for outro in manager.active_vehicles:
 				if outro == v:
 					continue
-				assert_float(absf(v.position.y - outro.position.y)).is_greater_equal(
-					GameConfig.traffic_min_spacing - 0.5
-				).override_failure_message(
-					"FR-019: veículo nasciu colado em outro (espaçamento mínimo)"
+				var folga_x: float = (
+					absf(v.position.x - outro.position.x)
+					- (v.category.size.x + outro.category.size.x) * 0.5
+				)
+				var folga_y: float = (
+					absf(v.position.y - outro.position.y)
+					- (v.category.size.y + outro.category.size.y) * 0.5
+				)
+				assert_bool(
+					folga_x >= GameConfig.traffic_min_separation - 0.5
+					or folga_y >= GameConfig.traffic_min_separation - 0.5
+				).is_true().override_failure_message(
+					"FR-019/ajuste 3: veículo nasciu sobreposto a outro"
 				)
 
 	assert_int(nascimentos).is_greater(3).override_failure_message(
-		"T019: poucos nascimentos para validar o espaçamento"
+		"T019: poucos nascimentos para validar a separação"
 	)
 
 

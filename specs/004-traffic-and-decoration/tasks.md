@@ -424,3 +424,18 @@ Com mais de uma pessoa, após a Foundational:
   - `test_sc003_continuous_inversion_when_crossing_vehicle_speed`: um `esporte` (96.0) controlado, estrada varrida de 60.0 a 100.0; por quadro o sinal do deslocamento é o sinal de (estrada − veículo), exatamente 1 inversão, no máximo 1 quadro parado (o cruzamento exato) e nenhum salto; verde
 - [X] T066 Criar `tests/unit/test_constitution.gd` com regressão dos princípios redefinidos pela emenda v2.0.0 (§Trânsito e §Suporte Multilíngue), conforme o procedimento de emenda per Constitution §Governança (missing)
   - 5 casos: documento em 2.0.0 em pt-BR com as duas ressalvas da emenda (SPEC-005 e localização dedicada); veículo fornece identificação/posição/área (§Trânsito MUST); vocabulário de colisão ausente de sinais e métodos dos 4 scripts novos (§Trânsito MUST NOT); geração separada do veículo; `display_name` de usuário externalizado em GameConfig (§VI SHOULD). Verde
+---
+
+## Phase 13: Ajustes pós-implementação (2026-10-05 — validados nos testes manuais da SPEC-005)
+
+> 4 ajustes de comportamento do trânsito descobertos durante o aceite manual da SPEC-005;
+> registrados nesta spec (clarificações de 2026-10-05, FR-019/FR-023 emendados, FR-063/FR-064,
+> FR-065, SC-006/SC-028/SC-029/SC-030). Suíte completa ao final dos 6 ajustes (incluindo os
+> ajustes 4 e 6, da SPEC-005): 24 suítes, 160 casos verdes (exit 101).
+
+- [X] T067 [P] Ajuste 1 — separação no nascimento: `traffic_min_separation` + checagem retangular no spawn de `src/traffic/traffic_manager.gd` e suíte nova `tests/unit/test_traffic_separation.gd` per FR-019
+- [X] T068 Ajuste 2 — líder de comboio restrito ao mesmo corredor lateral em `_lider_mais_proximo()` (`src/traffic/traffic_manager.gd`); invariante do teste de 10 min (`tests/unit/test_memory_stability.gd`) passa a contar pares apenas no mesmo corredor per FR-007, FR-011, SC-006, SC-029
+- [X] T069 Ajuste 3 — densidade mínima (3 na estrada junto ao jogador) com reposição imediata por quadro e teto de ativos por dificuldade (máx. 5 visíveis em Gelo): parâmetros em `src/config/game_config.gd`, lógica em `src/traffic/traffic_manager.gd`, suíte nova `tests/unit/test_traffic_density.gd` e exceção de enchimento no teste FR-019 legado (`test_no_immediate_overlap_after_spawn`) per FR-063, FR-064, SC-028
+- [X] T070 [P] Atualização documental: clarificações de 2026-10-05, emendas de FR-019/FR-023, FR-063/FR-064, SC-006/SC-028/SC-029 e caso de borda em `specs/004-traffic-and-decoration/spec.md`; nota de revalidação nos checklists; ponteiros nos `quickstart.md` das duas specs
+- [X] T071 Ajuste 5 — travamento de velocidade entre categorias: faixas laterais reservadas por velocidade (`_slot_da_categoria`) na origem do nascimento, corredor lateral = interseção das projeções laterais em `_lider_mais_proximo()` e piso de espaçamento size-aware (meias-alturas + separação) em `_espaco_min_centros()` de `src/traffic/traffic_manager.gd`; invariante do teste de 10 min (`tests/unit/test_memory_stability.gd`) passa a contar pares apenas com projeções intersectadas e suíte nova `tests/unit/test_traffic_speed_ordering.gd` (colunas ordenadas, caminhão livre na taxa da categoria, separação size-aware durante o movimento) per FR-019, FR-065, SC-006, SC-030
+- [X] T072 [P] Atualização documental do ajuste 5: clarificações, FR-065, SC-030, caso de borda "Faixa da velocidade ocupada no nascimento" e emendas de FR-019/SC-006/SC-029 em `specs/004-traffic-and-decoration/spec.md`; contagens e ponteiros nos `quickstart.md` das duas specs, checklist da SPEC-004, tabela de ajustes do `plan.md` da SPEC-005 e `AGENTS.md`

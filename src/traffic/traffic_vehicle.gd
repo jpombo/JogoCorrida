@@ -45,6 +45,11 @@ var y_nascimento: float = 0.0
 ## Textura já carregada, memorizada para não recarregar por recycle (FR-017).
 var _textura_atual: Texture2D = null
 
+## Deslocamento de ultrapassagem do SPEC-005 (contrato consumed_apis §4).
+## Aditivo e inerte por padrão: sem chamada de `apply_overtake_offset`,
+## o comportamento é idêntico ao SPEC-004 (FR-033). Nunca toca a velocidade.
+var overtake: NpcOvertakeState = NpcOvertakeState.new()
+
 
 func _ready() -> void:
 	# Pixel art: sem interpolação (FR-047, constitution §Câmera e Apresentação).
@@ -80,6 +85,22 @@ func deactivate() -> void:
 	visible = false
 	reposition_lerp = 0.0
 	ja_visto = false
+	overtake.resetar()
+
+
+## Inicia o deslocamento lateral de ultrapassagem (SPEC-005, FR-018/FR-019).
+## Somente o CollisionSystem chama, na colisão tipo 1-3. A velocidade da
+## categoria permanece intocada (FR-017) e o clamp da pista é aplicado a
+## cada quadro, na altura vigente (FR-020). Ajuste 6: captura o x da faixa de
+## origem para o RETORNO obrigatório ao fim da ida (FR-021).
+func apply_overtake_offset(p_direcao: int, p_magnitude: float, p_duracao: float) -> void:
+	overtake.iniciar(
+		p_direcao,
+		p_magnitude,
+		p_duracao,
+		GameConfig.npc_overtake_return_duration,
+		position.x
+	)
 
 
 ## Verdadeiro enquanto o veículo está em cena (consumido pelo I5 e pelo SPEC-005).
@@ -142,6 +163,7 @@ func update_scroll(delta: float, road_speed: float, bounds: Dictionary, dy_limit
 	position.y += dy
 
 	_reposicionar_se_estreitou(delta, bounds, direita)
+	_aplicar_overtake(delta, bounds, direita)
 
 	# O ponto de referência lateral é recalculado a cada quadro para que o
 	# reposicionamento do quadro seguinte parta do limite vigente (R8).
@@ -184,6 +206,45 @@ func _reaplicar_limite(direita: float) -> void:
 		limite_direito = limite_esquerdo
 	lane_position = clampf(lane_position, limite_esquerdo, limite_direito)
 	position.x = lane_position
+
+
+## Deslocamento lateral da ultrapassagem (SPEC-005): aplica o incremento do
+## quadro com clamp nos limites vigentes; sem espaço, para no limite — a
+## ultrapassagem conclui assim que houver espaço (spec §Edge Cases).
+## Ajuste 6: após a IDA, a fase de RETORNO leva o veículo de volta ao x da
+## faixa de origem (clampado nos limites vigentes) e só então encerra — é o
+## que garante que o NPC volte ao corredor da própria velocidade (FR-021).
+func _aplicar_overtake(delta: float, bounds: Dictionary, direita: float) -> void:
+	if not overtake.ativo():
+		return
+
+	var esquerda: float = float(bounds.get("left", GameConfig.road_left_boundary))
+	var meia_largura: float = category.size.x * 0.5
+	var limite_esq: float = esquerda + meia_largura
+	var limite_dir: float = direita - meia_largura
+
+	if overtake.em_retorno():
+		var alvo: float = clampf(overtake.x_origem, limite_esq, limite_dir)
+		var dif: float = alvo - position.x
+		var passo_max: float = (
+			overtake.magnitude * delta / maxf(overtake.duracao_retorno, 0.001)
+		)
+		var passo: float = clampf(dif, -passo_max, passo_max)
+		position.x = clampf(position.x + passo, limite_esq, limite_dir)
+		lane_position = position.x
+		if absf(alvo - position.x) <= 0.05:
+			overtake.encerrar()
+		return
+
+	var incremento: float = overtake.proximo_incremento(delta)
+	if is_zero_approx(incremento):
+		overtake.confirmar_aplicado(0.0)
+		return
+	var alvo: float = clampf(position.x + incremento, limite_esq, limite_dir)
+	var efetivo: float = alvo - position.x
+	position.x = alvo
+	lane_position = alvo
+	overtake.confirmar_aplicado(efetivo)
 
 
 ## Carrega a textura da pasta `assets_path` da categoria e mede a dimensão real

@@ -111,9 +111,31 @@ var TRAFFIC_CATEGORIES: Dictionary = {
 ## a dificuldade do SPEC-008 adjusta frequência, densidade e quantidade, nunca identidade.
 @export var traffic_enabled: bool = true
 @export var traffic_max_vehicles: int = 12
-@export var traffic_spawn_distance: float = 260.0
+@export var traffic_spawn_distance: float = 80.0
+## Variação vertical da faixa de nascimento acima da tela (px). Só separa
+## visualmente quem já vai entrar — a separação de retângulos no birth é
+## garantida por `traffic_min_separation`.
+@export var traffic_spawn_distance_variance: float = 120.0
+## Distância de reposição acima da tela durante o enchimento (px): curta de
+## propósito — quem sai por baixo é reposto no topo quase de imediato.
+@export var traffic_spawn_fill_distance: float = 40.0
 @export var traffic_spawn_interval: float = 1.2
 @export var traffic_min_spacing: float = 70.0
+## Separação mínima (px) entre as bordas de dois veículos de trânsito, em
+## qualquer eixo: impede que NPCs nasçam colados ou sobrepostos entre si.
+@export var traffic_min_separation: float = 12.0
+
+## Densidade de trânsito visível (ajuste 3/4): mínimo de NPCs com pixel na
+## tela a perseguir em ritmo acelerado de spawn, e máximo de NPCs ATIVOS
+## (visíveis + a caminho) por nível de dificuldade do ambiente
+## (ENVIRONMENTS[id].difficulty: 1=Planície ... 4=Gelo) — como todo ativo
+## acaba entrando na tela, o teto de ativos é o que garante o teto de visíveis.
+## É dado de configuração: o SPEC-008 poderá reescrever estes valores.
+@export var traffic_min_visible: int = 3
+var traffic_max_visible_by_difficulty: Dictionary = { 1: 5, 2: 5, 3: 5, 4: 5 }
+## Intervalo de spawn quando abaixo do mínimo visível (enchimento gradual,
+## um por vez — nunca em lote).
+@export var traffic_spawn_interval_filling: float = 0.35
 
 ## Bibliotecas de decoração por ambiente.
 ## Cada entrada vira um DecorationData (src/decoration/decoration_data.gd).
@@ -176,6 +198,58 @@ var DECORATION_PATHS: Dictionary = {
 @export var decoration_scale: float = 1.0
 @export var decoration_safety_margin: float = 24.0
 @export var decoration_tree_repeat_limit: int = 10
+
+# ---------------------------------------------------------------------------
+# SPEC-005 — Sistema de Colisão e Drift
+# ---------------------------------------------------------------------------
+# Todos os parâmetros de colisão/drift são ajustáveis sem alteração de código
+# (FR-035, SC-012); nenhum deles pode aparecer fixo na lógica.
+
+## Perda de velocidade do jogador na colisão (unidades de velocidade internas)
+@export var collision_speed_loss_min: float = 10.0
+@export var collision_speed_loss_max: float = 45.0
+
+## Tempo (s) após a colisão em que a aceleração do jogador é desconsiderada
+## (ajuste 4): sem isso, quem segura o acelera recomposta a perda no mesmo
+## instante e a "empurrada para trás" do impacto some — o jogador parecia
+## voltar direto à posição de antes. A frenagem continua valendo.
+@export var collision_accel_lockout_time: float = 0.8
+
+## Drift do jogador (deslocamento lateral do impacto e controle reduzido)
+@export var drift_force_min: float = 60.0    # px/s de deslocamento no impacto mínimo
+@export var drift_force_max: float = 180.0   # px/s no impacto máximo
+@export var drift_duration_min: float = 0.4  # segundos
+@export var drift_duration_max: float = 1.2  # segundos
+@export var drift_control_factor: float = 0.4  # resposta lateral durante o drift (SC-004)
+@export var drift_recovery_rate: float = 1.2   # fator de controle recuperado por segundo
+
+## Cooldown por par jogador↔NPC (segundos)
+@export var collision_cooldown_time: float = 0.8
+
+## Margem neutra da posição relativa, em px (FR-005)
+@export var collision_neutral_margin: float = 4.0
+
+## Ultrapassagem do NPC na colisão tipo 1-3 (FR-018, FR-019)
+@export var npc_overtake_magnitude: float = 40.0  # px laterais
+@export var npc_overtake_duration: float = 1.0    # segundos (ida até o ponto de ultrapassagem)
+## Retorno do NPC à faixa de origem após a ida (FR-021, ajuste 6): sem ele o
+## NPC ficava deslocado para sempre, invadindo o corredor de outra velocidade.
+@export var npc_overtake_return_duration: float = 1.0  # segundos
+
+## Divisor de normalização da intensidade (velocidade relativa → 0..1, R8)
+@export var collision_intensity_divisor: float = 100.0
+
+## Hitbox do jogador (largura x altura, centrada na posição) — independente do sprite (FR-006)
+@export var player_hitbox_size: Vector2 = Vector2(24.0, 40.0)
+
+## Hitboxes por categoria de NPC (independentes dos sprites — FR-007, FR-008).
+## Categoria ausente cai no retângulo de `get_occupied_area()` como fallback.
+var NPC_HITBOX_SIZES: Dictionary = {
+	"caminhao": Vector2(30.0, 64.0),
+	"utilitario": Vector2(24.0, 44.0),
+	"passeio": Vector2(24.0, 42.0),
+	"esporte": Vector2(26.0, 38.0),
+}
 
 ## Agrupamentos de parâmetros expostos ao SPEC-008 (FR-061, data-model.md §8).
 ## Somente leitura nesta versão: o SPEC-004 expõe a estrutura, o SPEC-008 resolve a dificuldade.

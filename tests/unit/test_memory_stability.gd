@@ -168,13 +168,24 @@ func test_sc006_traffic_spacing_in_ten_minutes() -> void:
 
 		for a in ativos.size():
 			for b in range(a + 1, ativos.size()):
-				if (
-					absf(ativos[a].position.y - ativos[b].position.y)
-					< GameConfig.traffic_min_spacing
-				):
+				# Espaçamento longitudinal só vale no MESMO corredor lateral:
+				# o corredor é a INTERSEÇÃO das projeções laterais
+				# (`folga_x < 0` — ajuste 5). Pares lado a lado nunca se
+				# sobrepõem em Y e, ali, vale a regra de separação retangular.
+				# Sem este ajuste o trânsito inteiro viraria comboio, apagando
+				# a diferença de velocidade entre categorias (ajuste 2/4/5).
+				var va: TrafficVehicle = ativos[a]
+				var vb: TrafficVehicle = ativos[b]
+				var folga_x: float = (
+					absf(va.position.x - vb.position.x)
+					- (va.category.size.x + vb.category.size.x) * 0.5
+				)
+				if folga_x >= 0.0:
+					continue
+				if absf(va.position.y - vb.position.y) < GameConfig.traffic_min_spacing:
 					pares_ruins += 1
-					veiculos_ruins[ativos[a].get_instance_id()] = true
-					veiculos_ruins[ativos[b].get_instance_id()] = true
+					veiculos_ruins[va.get_instance_id()] = true
+					veiculos_ruins[vb.get_instance_id()] = true
 
 		piores_pares = maxi(piores_pares, pares_ruins)
 		piores_veiculos = maxi(piores_veiculos, veiculos_ruins.size())

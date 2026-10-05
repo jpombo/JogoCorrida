@@ -21,6 +21,11 @@ var environment_manager: EnvironmentManager = EnvironmentManager.new()
 ## sinal novo em `EnvironmentManager` (D9: nada escreve em SPEC-003).
 var _ambiente_propagado: String = ""
 
+## Sistema de colisão (SPEC-005, FR-033): componente separado do trânsito;
+## consome área ocupada, velocidade e limites vigentes, e emite o evento de
+## colisão sem tocar nenhum outro sistema (FR-030).
+var collision_system: CollisionSystem = CollisionSystem.new()
+
 func _ready() -> void:
 	# Conectar signals do GameState
 	game_state.state_changed.connect(_on_state_changed)
@@ -106,6 +111,14 @@ func _process(_delta: float) -> void:
 		if player_vehicle and road:
 			var boundaries = road.get_boundaries_for_player_y(player_vehicle.position.y)
 			player_vehicle.controller.update_boundaries(boundaries.left, boundaries.right)
+
+		# SPEC-005: colisão roda depois do trânsito (posições finais do quadro)
+		# e depois dos limites do jogador; usa os limites vigentes por altura.
+		if player_vehicle and traffic_layer and road:
+			collision_system.update(
+				_delta, player_vehicle, traffic_layer.active_vehicles_snapshot,
+				Callable(road, "get_boundaries_for_player_y")
+			)
 	
 	# Retomar com Escape quando pausado
 	elif game_state.current_state == game_state.State.PAUSED:
