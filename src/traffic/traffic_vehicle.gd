@@ -45,10 +45,23 @@ var y_nascimento: float = 0.0
 ## Textura já carregada, memorizada para não recarregar por recycle (FR-017).
 var _textura_atual: Texture2D = null
 
+## Categoria dona da textura memorizada. O cache só vale para ela: um veículo
+## do pool reutilizado com outra categoria precisa carregar a textura da nova
+## pasta, senão ele exibe a aparência antiga com a velocidade da categoria
+## atual (FR-011 — aparência e velocidade são da mesma categoria). A guarda
+## antiga (`category.size != ZERO`) era sempre verdadeira porque `setup()`
+## já mede o `size` de toda categoria antes do primeiro spawn.
+var _textura_categoria_id: String = ""
+
 ## Deslocamento de ultrapassagem do SPEC-005 (contrato consumed_apis §4).
 ## Aditivo e inerte por padrão: sem chamada de `apply_overtake_offset`,
 ## o comportamento é idêntico ao SPEC-004 (FR-033). Nunca toca a velocidade.
 var overtake: NpcOvertakeState = NpcOvertakeState.new()
+
+## Estado de drift pós-colisão NPC×NPC do SPEC-006 (contrato consumed_apis §1).
+## Aditivo e inerte por padrão: sem chamada de `aplicar_drift_npc`, o
+## comportamento é idêntico ao SPEC-004/005 (SC-016). Nunca toca a velocidade.
+var npc_drift: NpcDriftState = NpcDriftState.new()
 
 
 func _ready() -> void:
@@ -86,6 +99,7 @@ func deactivate() -> void:
 	reposition_lerp = 0.0
 	ja_visto = false
 	overtake.resetar()
+	npc_drift.resetar()
 
 
 ## Inicia o deslocamento lateral de ultrapassagem (SPEC-005, FR-018/FR-019).
@@ -101,6 +115,36 @@ func apply_overtake_offset(p_direcao: int, p_magnitude: float, p_duracao: float)
 		GameConfig.npc_overtake_return_duration,
 		position.x
 	)
+
+
+## Inicia (ou SUBSTITUI) o drift NPC×NPC (SPEC-006, FR-014, Clarificação Q4).
+## Somente o NpcCollisionSystem chama. Só o estado lateral muda: a velocidade
+## da categoria permanece intocada (FR-017).
+func aplicar_drift_npc(
+	p_direcao: int, p_forca: float, p_duracao: float, p_cadeia_id: int = 0,
+	p_profundidade: int = 1
+) -> void:
+	npc_drift.iniciar(p_direcao, p_forca, p_duracao, p_cadeia_id, p_profundidade)
+
+
+## Avança as fases do drift e aplica o deslocamento lateral EFETIVO do quadro
+## (SPEC-006, FR-018). Chamado pelo NpcCollisionSystem por quadro enquanto o
+## drift estiver ativo. Escreve SOMENTE em `position.x` (e `lane_position`,
+## que é o espelho do x da faixa); velocidade, scroll e estado do pool são
+## intocados (FR-017, contrato consumed_apis §1).
+##
+## `limite_esq`/`limite_dir` vêm dos limites vigentes do Road NA ALTURA do
+## veículo, com a meia-largura já embutida pelo chamador (FR-040, R3).
+func atualizar_drift_npc(delta: float, limite_esq: float, limite_dir: float) -> void:
+	if state != State.ACTIVE or not npc_drift.ativo():
+		return
+	var deslocamento: float = npc_drift.proximo_deslocamento(
+		delta, position.x, limite_esq, limite_dir
+	)
+	if is_zero_approx(deslocamento):
+		return
+	position.x += deslocamento
+	lane_position = position.x
 
 
 ## Verdadeiro enquanto o veículo está em cena (consumido pelo I5 e pelo SPEC-005).
@@ -186,9 +230,10 @@ func _reposicionar_se_estreitou(delta: float, bounds: Dictionary, direita: float
 		return
 
 	# `t` avança com o tempo de transição da estrada. Usa-se a largura como
-	# progresso porque Road já interpolou o limite que estamos seguindo.
+	# progresso porque Road já interpolou o limite que estamos seguindo — a
+	# largura é a da pista expandida (GameConfig, FR-044), não um literal.
 	var reducao: float = previous_right_boundary - direita
-	var largura_antiga: float = 176.0
+	var largura_antiga: float = GameConfig.road_expanded_width
 	reposition_lerp = minf(reposition_lerp + (reducao / largura_antiga), 1.0)
 	_reaplicar_limite(direita)
 
@@ -258,9 +303,14 @@ func carregar_textura() -> void:
 		return
 
 	# A dimensão é medida uma vez por categoria e reaproveitada nos recycles.
-	if _textura_atual != null and category.size != Vector2.ZERO:
+	# O cache de textura acompanha a CATEGORIA: reutilizado com outra, o
+	# veículo recarrega da pasta dela em vez de herdar a aparência anterior.
+	if _textura_atual != null and _textura_categoria_id == category.id:
 		texture = _textura_atual
 		return
+
+	_textura_atual = null
+	_textura_categoria_id = ""
 
 	var indice: int = randi() % category.assets.size()
 	var candidato: String = category.texture_path_for(category.assets[indice])
@@ -285,6 +335,7 @@ func _tentar_carregar(caminho: String) -> bool:
 
 	texture = t
 	_textura_atual = t
+	_textura_categoria_id = category.id
 	# A dimensão real medida é a fonte da verdade para posicionamento e área
 	# ocupada — não uma configuração, e não um hitbox (R10).
 	category.size = Vector2(t.get_width(), t.get_height())

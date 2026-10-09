@@ -6,11 +6,14 @@ JogoCorrida ("racing game") is a **spec-kit / Specify spec-driven development (S
 
 ## Estado atual
 
-Specs concluídas e implementadas: **SPEC-001** (controle do veículo), **SPEC-002** (estrada e scrolling), **SPEC-003** (ambientes), **SPEC-004** (trânsito e decoração), **SPEC-005** (colisão e drift) — 24 suítes de teste, 160 casos verdes (exit 101).
+Specs **concluídas e commitadas**: **SPEC-001** (controle do veículo), **SPEC-002** (estrada e scrolling), **SPEC-003** (ambientes), **SPEC-004** (trânsito e decoração), **SPEC-005** (colisão e drift). **SPEC-006** (colisão NPC↔NPC) está **implementada e com suíte verde, porém não commitada** (trabalho pendente na branch `dev`).
 
+- **SPEC-006 — onde está (2026-10-09)**: código em `src/collision/npc_*.gd`, integração em `gameplay_manager.gd`, 9 suítes `npc_*` em `tests/unit/`; `tasks.md` com T001–T049 e T053 `[X]` — faltam só aceite manual **T037, T050, T051, T052** (T054 = esta atualização). Suíte completa: **35 suítes, 214 casos, exit 101**.
+- **Clarify da SPEC-006 (2026-10-09, "trânsito real")**: causa-raiz dos relatos DESERT/FOREST confirmada pela sonda `tests/unit/test_traffic_corridor_probe.gd` (**só-reporta**: A=266 quadros de arranjo fechante, B=71 de grude do limitador, D=0 contatos → US1 inatingível com o limitador atual). A spec recebeu **FR-046** (o espaçamento mínimo do SPEC-004 cede, durante o movimento, entre velocidades diferentes na mesma trajetória até o contato; nascimento e pares de mesma velocidade inalterados), o **6º cenário de aceitação da US1** (caso natural resolve em contato+drift) e a premissa de corredores reescrita com **dívida conhecida da SPEC-004** (recuo de faixa para faixa alheia; convergência no estreitamento sem rechecagem de ordenação). **FR-046 ainda não foi implementado** — `plan.md`/`tasks.md` estão defasados em relação ao amend.
+- **Pendências da SPEC-006**: `/speckit.analyze` (consistência spec↔plan↔tasks após o clarify) → atualizar plan/tasks para o FR-046 → implementar a cedência do limitador → reativar os asserts da sonda (A/B/D) → aceite manual T037/T050–T052 → commit.
+- **Git**: todo o trabalho da SPEC-006 (`specs/006-...`, `src/collision/npc_*.gd`, suítes `npc_*` e a sonda) mais a correção de textura de NPCs (`test_traffic_texture_category.gd`, `traffic_vehicle.gd`) está **uncommitted** em `dev`.
 - A SPEC-005 passou por **6 ajustes pós-implementação** (aceite manual, 2026-10-05): ajustes 1–3 e 5 de domínio do trânsito (registrados no spec da SPEC-004: separação no nascimento, corredor lateral, densidade mínima, faixas por velocidade) e ajustes 4 e 6 da SPEC-005 (bloqueio da aceleração pós-colisão — FR-036/SC-013; retorno do NPC à faixa após a ultrapassagem — FR-019/FR-021/SC-014). Todos validados na suíte completa; registro em `tasks.md` Phase 13 de cada spec.
 - 2026-10-05: corrigidos dois testes instáveis (flaky) causados por **reciclagem do pool no mesmo quadro** (mesma instância desativada e reativada entre medições): guarda de salto no eixo Y em `test_traffic_speed_ordering.gd` e invalidação de baseline pelo sinal `element_recycled` em `test_decoration_manager.gd`. Suíte completa verde em 12 execuções consecutivas.
-- **Próxima feature planejada**: colisão NPC↔NPC (o NPC de baixo muda de pista), a iniciar com `/speckit.specify` após confirmação do usuário.
 
 ## Build & test
 

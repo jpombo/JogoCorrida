@@ -30,7 +30,11 @@ JogoCorrida/
 │   │   ├── collision_data.gd     # Evento de colisão (par, tipo 1-1/1-2/1-3, velocidade, intensidade, drift)
 │   │   ├── collision_system.gd   # Detecção, classificação e consequências (cooldown, perda, drift, ultrapassagem)
 │   │   ├── drift_state.gd        # Fases do drift do jogador (impacto, drift, recuperação)
-│   │   └── npc_overtake_state.gd # Deslocamento lateral do NPC com retorno à faixa de origem (FR-021)
+│   │   ├── npc_overtake_state.gd # Deslocamento lateral do NPC com retorno à faixa de origem (FR-021)
+│   │   ├── npc_collision_data.gd # Evento NPC×NPC com os 7 campos (SPEC-006, FR-041)
+│   │   ├── npc_collision_system.gd # Contato, previsão, cadeia, cooldown e validação de spawn (SPEC-006)
+│   │   ├── npc_chain_state.gd    # Cadeia dominó: id, profundidade, timeout, processados (SPEC-006)
+│   │   └── npc_drift_state.gd    # Fases do drift do NPC, sem mudança de velocidade (SPEC-006)
 │   └── decoration/
 │       ├── decoration_data.gd    # Elemento da biblioteca (repeatable, weight)
 │       ├── decoration_manager.gd # Biblioteca por ambiente, profundidades, sorteio
@@ -46,7 +50,8 @@ JogoCorrida/
 │   ├── 002-road-scrolling-system/
 │   ├── 003-environment-scenarios/
 │   ├── 004-traffic-and-decoration/
-│   └── 005-collision-drift-system/
+│   ├── 005-collision-drift-system/
+│   └── 006-npc-collision-system/
 └── tests/unit/                   # Testes unitários (GdUnit4)
 ```
 
@@ -90,7 +95,7 @@ JogoCorrida/
 - Veículos nascem fora da área visível e são reciclados por qualquer borda
 - **Sem colisão com o jogador**: nenhum objeto do spec tem corpo de física (FR-026, FR-049) — a colisão é tratada pelo SPEC-005 por hitbox
 - Cada veículo expõe os 6 atributos de FR-002 — tipo, posição, velocidade, **direção**, faixa e estado — mais a área ocupada (`get_vehicles_data()`)
-- Faixas laterais **reservadas por velocidade** (rápidas à esquerda, lentas à direita): velocidades distintas nunca compartilham corredor, o espaçamento do limitador é derivado das meias-alturas e o comboio considera apenas o líder do mesmo corredor (ajustes 1, 2 e 5 — FR-019/FR-065, SC-029/SC-030)
+- Faixas laterais **reservadas por velocidade** no nascimento (rápidas à esquerda, lentas à direita), com o espaçamento do limitador derivado das meias-alturas e o comboio considerando apenas o líder do mesmo corredor (ajustes 1, 2 e 5 — FR-019/FR-065, SC-029/SC-030). **Dívida conhecida** (registrada na SPEC-006): o recuo de faixa do nascimento e a convergência ao estreitar a pista ainda podem dividir o corredor entre velocidades distintas
 - Densidade mínima de 3 veículos junto ao jogador com reposição imediata por quadro e teto por dificuldade (máx. 5 visíveis em Gelo) (ajuste 3 — FR-063/FR-064, SC-028)
 
 **Decoração lateral** — biblioteca por ambiente, distribuída nos dois lados da estrada em 3 profundidades, sempre fora da área trafegável:
@@ -118,6 +123,17 @@ JogoCorrida/
 - **Zero regressão sem contato**: sem colisão, todos os SPECs 001–004 comportam-se identicamente (FR-034, SC-010)
 - Evento de colisão completo (par, tipo, velocidade de impacto, intensidade, direção do drift) para consumo externo (FR-029/FR-030)
 
+### SPEC-006: Sistema de Colisão entre NPCs
+
+- **Contato NPC×NPC** por áreas físicas por categoria (independentes dos sprites), classificado como longitudinal ou lateral, com intensidade pela velocidade relativa e identificação de causador/atingido (FR-010–FR-013)
+- **Previsão com janela de atividade**: par só é considerado potencial se o encontro ocorrer com os dois ainda ativos; par de mesma velocidade ou em trajetórias distintas nunca gera previsão (FR-001–FR-006), com reavaliação ao mudar a velocidade do jogador (FR-032–FR-035)
+- **Resposta 100% lateral**: drift no atingido (novo impacto substitui o drift em curso), causador intacto e **velocidade intocável em nenhuma fase** — nem temporariamente (FR-014–FR-017)
+- **Limites da pista**: inversão do drift junto à borda, transferência do deslocamento ao causador quando sem espaço, e nenhum veículo sai da área trafegável, inclusive durante a transição 2↔4 vias (FR-018–FR-020, US4)
+- **Cadeia dominó controlada**: profundidade máxima, expiração por tempo, zero loops, cooldown isolado por par (FR-024–FR-027)
+- **Validação de spawn**: outra posição → outra faixa → adiamento para o quadro seguinte, sem perder o nascimento (FR-028–FR-031, integrado ao `TrafficManager`)
+- **Evento informativo** com 7 campos para observadores futuros; nada mais é alterado (FR-041)
+- **Clarify 2026-10-09 (trânsito real — FR-046, ainda não implementado)**: o espaçamento mínimo do SPEC-004 cede, durante o movimento, entre velocidades diferentes na mesma trajetória até o contato (é o que torna a US1 alcançável naturalmente); no nascimento e entre pares de mesma velocidade o espaçamento permanece. A causa dos relatos DESERT/FOREST foi reproduzida pela sonda `test_traffic_corridor_probe.gd` (só-reporta) e a dívida de nascimento/convergência da SPEC-004 está registrada na spec.
+
 ## Configuração
 
 - Resolução: 640x480 (pixel art)
@@ -131,20 +147,21 @@ Tudo é configurável em `src/config/game_config.gd` (autoload `GameConfig`):
 
 - **Trânsito**: `traffic_enabled`, `traffic_max_vehicles`, `traffic_spawn_distance`/`_variance`, `traffic_spawn_interval`/`_filling`, `traffic_min_spacing`, `traffic_min_separation`, `traffic_min_visible`, `traffic_max_visible_by_difficulty`, `traffic_spawn_fill_distance` e `traffic_frequency_<categoria>`
 - **Decoração**: `decoration_enabled`, `decoration_density`, `decoration_spacing_min/max`, `decoration_depth_count/spacing`, `decoration_scale`, `decoration_safety_margin`, `decoration_tree_repeat_limit`
-- **Colisão e drift**: `collision_speed_loss_min/max`, `drift_force_min/max`, `drift_duration_min/max`, `drift_control_factor`, `drift_recovery_rate`, `collision_cooldown_time`, `collision_neutral_margin`, `collision_intensity_divisor`, `npc_overtake_magnitude`/`_duration`/`_return_duration`, `collision_accel_lockout_time`, `player_hitbox_size` e `NPC_HITBOX_SIZES`
+- **Colisão e drift do jogador**: `collision_speed_loss_min/max`, `drift_force_min/max`, `drift_duration_min/max`, `drift_control_factor`, `drift_recovery_rate`, `collision_cooldown_time`, `collision_neutral_margin`, `collision_intensity_divisor`, `npc_overtake_magnitude`/`_duration`/`_return_duration`, `collision_accel_lockout_time`, `player_hitbox_size` e `NPC_HITBOX_SIZES`
+- **Colisão entre NPCs (SPEC-006)**: `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_drift_duration_min/max`, `npc_drift_recovery_rate`, `npc_relative_position_threshold`, `npc_border_margin`, `npc_max_chain_depth`, `npc_chain_timeout`, `npc_displacement_limit`, `npc_spawn_safety_distance`, `npc_collision_prediction_horizon`, `npc_min_relative_speed`, `npc_active_area_margin`, `npc_reevaluation_interval` e `npc_player_speed_change_threshold`
 - Bibliotecas: `TRAFFIC_CATEGORIES` (velocidade, pasta, assets, frequência) e `DECORATION_LIBRARIES` (`asset`, `repeatable`, `weight`)
 - Agrupamentos somente leitura para o futuro SPEC-008: `traffic_tuning` e `decoration_tuning`
 
 ## Testes
 
-24 suítes GdUnit4 em `tests/unit/`, **160 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution v2.0.0):
+35 suítes GdUnit4 em `tests/unit/`, **214 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution v2.0.0):
 
 ```bash
 GODOT_BIN=<caminho do godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit
 # tudo verde quando o runner sai com exit 101
 ```
 
-Cobertura principal: 8 suítes de colisão (`collision_*_test.gd`, SPEC-005), 7 de trânsito (`test_traffic_*`, `test_memory_stability`, `test_no_collision`), 3 de decoração, mais estrada, ambiente, física do jogador, performance, regressão do SPEC-004 e constituição.
+Cobertura principal: 9 suítes de colisão NPC×NPC (`npc_*_test.gd`, SPEC-006), 8 de colisão do jogador (`collision_*_test.gd`, SPEC-005), trânsito (incluindo a sonda de corredor `test_traffic_corridor_probe.gd`, **só-reporta** — evidências A/B/D da pendência FR-046 — e a regressão de textura de NPCs), decoração, estrada, ambiente, física do jogador, performance, regressão do SPEC-004 e constituição.
 
 Relatórios gerados em `reports/` (ignorados pelo git). Abra o editor Godot uma vez por máquina antes do headless para gerar os `*.import` dos assets.
 

@@ -26,6 +26,11 @@ var _ambiente_propagado: String = ""
 ## colisão sem tocar nenhum outro sistema (FR-030).
 var collision_system: CollisionSystem = CollisionSystem.new()
 
+## Sistema de colisão NPC×NPC (SPEC-006, FR-036): também componente
+## separado; consome os ativos do trânsito e os limites por altura, e só
+## escreve em `position.x` dos envolvidos via drift (FR-017).
+var npc_collision_system: NpcCollisionSystem = NpcCollisionSystem.new()
+
 func _ready() -> void:
 	# Conectar signals do GameState
 	game_state.state_changed.connect(_on_state_changed)
@@ -38,8 +43,33 @@ func _ready() -> void:
 	# PlayerVehicle ou em EnvironmentManager (FR-052, D9, I7).
 	if traffic_layer:
 		traffic_layer.setup(GameConfig.TRAFFIC_CATEGORIES)
+		# SPEC-006 / FR-028: o nascimento passa a ser validado contra a
+		# janela de atividade NPC×NPC. Nulo manteria o caminho legado do
+		# SPEC-004 (o validador é consulta, não dependência).
+		traffic_layer.validador = npc_collision_system
 	if decoration_layer:
 		decoration_layer.setup(GameConfig.DECORATION_LIBRARIES)
+
+	# SPEC-006 / FR-033, R8: os eventos da dinâmica da área ativa disparam a
+	# reavaliação (reconstrução do cache no próximo quadro; os vereditos são
+	# recomputados sob demanda). Lambdas com a aridade exata de cada sinal —
+	# `marcar_reavaliacao` não recebe argumentos. Os sinais são emitidos
+	# durante as atualizações, ANTES do npc_collision_system no quadro, e o
+	# rebuild acontece no mesmo quadro via `_revalidar_cache`.
+	if traffic_layer:
+		traffic_layer.vehicle_spawned.connect(
+			func(_v): npc_collision_system.marcar_reavaliacao()
+		)
+		traffic_layer.vehicle_recycled.connect(
+			func(_v): npc_collision_system.marcar_reavaliacao()
+		)
+	if road:
+		road.segment_type_changed.connect(
+			func(_tipo): npc_collision_system.marcar_reavaliacao()
+		)
+		road.boundary_changed.connect(
+			func(_esq, _dir): npc_collision_system.marcar_reavaliacao()
+		)
 
 	_propagar_ambiente(GameConfig.current_environment_id)
 
@@ -105,6 +135,18 @@ func _process(_delta: float) -> void:
 
 		if traffic_layer and road:
 			traffic_layer.update(_delta, road)
+
+		# SPEC-006: colisão NPC×NPC depois do trânsito (posições finais do
+		# quadro) e ANTES do SPEC-005, para que um NPC já deslocado ocupe a
+		# posição final quando o detector do jogador for avaliar — SC-015
+		# observável no mesmo quadro do contato (T035, research R9).
+		if traffic_layer and road:
+			npc_collision_system.update(
+				_delta,
+				traffic_layer.active_vehicles_snapshot,
+				Callable(road, "get_boundaries_for_player_y"),
+				road.scroll_speed
+			)
 
 		# Atualizar limites baseado na posição Y do jogador
 		# Isso permite transições precisas em segmentos de expansão/redução

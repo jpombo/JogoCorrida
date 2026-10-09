@@ -20,6 +20,12 @@ extends Node
 @export var road_left_boundary: float = 248.0
 @export var road_right_boundary: float = 392.0
 
+## Largura da pista EXPANDIDA (4 vias) — o limite direito do trecho expandido
+## é `road_left_boundary + road_expanded_width`. Fonte única para o valor que
+## antes estava repetido nas transições 2→4→2: o cálculo de estreitamento do
+## TrafficVehicle normaliza o progresso `t` por esta largura (FR-021, R8).
+@export var road_expanded_width: float = 176.0
+
 ## Performance
 @export var target_fps: int = 60
 
@@ -256,6 +262,64 @@ var NPC_HITBOX_SIZES: Dictionary = {
 ## As chaves individuais acima continuam válidas — são uma projeção, não uma substituição.
 var traffic_tuning: Dictionary = {}
 var decoration_tuning: Dictionary = {}
+
+# ---------------------------------------------------------------------------
+# SPEC-006 — Sistema de Colisão entre NPCs
+# ---------------------------------------------------------------------------
+# Todos os parâmetros de colisão NPC×NPC são ajustáveis sem alteração de código
+# (FR-044, SC-017); nenhum deles pode aparecer fixo na lógica. Valores iniciais:
+# research.md §Valores de configuração.
+
+## Cooldown por PAR de veículos NPC↔NPC (segundos) — FR-026.
+@export var npc_collision_cooldown: float = 0.8
+
+## Drift do NPC atingido: força (px/s), duração (s) e taxa de recuperação.
+## A força/duração são interpoladas pela intensidade entre min e max (FR-014).
+@export var npc_drift_force_min: float = 40.0
+@export var npc_drift_force_max: float = 120.0
+@export var npc_drift_duration_min: float = 0.3
+@export var npc_drift_duration_max: float = 0.9
+@export var npc_drift_recovery_rate: float = 1.4  # fração de recuperação por segundo
+
+## Margem neutra lateral na decisão da direção do drift (px) — FR-015.
+@export var npc_relative_position_threshold: float = 4.0
+
+## Distância (px) da borda que classifica o atingido como "próximo da borda"
+## e dispara o fallback de direção/transferência ao causador — FR-019.
+@export var npc_border_margin: float = 20.0
+
+## Efeito dominó: profundidade máxima da cadeia e tempo de expiração (s) — FR-025.
+@export var npc_max_chain_depth: int = 3
+@export var npc_chain_timeout: float = 2.0
+
+## Teto do deslocamento lateral acumulado por impacto (px) — FR-020.
+@export var npc_displacement_limit: float = 48.0
+
+## Distância mínima de segurança (px) na validação de spawn — FR-028.
+@export var npc_spawn_safety_distance: float = 60.0
+
+## Horizonte máximo de previsão de colisão (s) — FR-003/FR-004.
+@export var npc_collision_prediction_horizon: float = 3.0
+
+## Diferença mínima de velocidade (px/s) para considerar aproximação relevante — FR-002.
+@export var npc_min_relative_speed: float = 1.0
+
+## Margem da área ativa somada ao tempo até o descarte na janela (px/s) — FR-004.
+@export var npc_active_area_margin: float = 40.0
+
+## Intervalo da atualização periódica de reavaliação (s) — FR-008, research R8.
+@export var npc_reevaluation_interval: float = 0.25
+
+## Variação absoluta da velocidade do jogador (unidades/s) que dispara
+## reavaliação imediata — "mudança relevante" de FR-033, research R8.
+@export var npc_player_speed_change_threshold: float = 10.0
+
+## Teto de NPCs ATIVOS: PROJEÇÃO somente leitura do teto por nível de
+## dificuldade do SPEC-004 (FR-064) — fonte única, nenhum valor armazenado
+## novo (FR-042, analyze D3). Atualizado a cada leitura a partir do ambiente.
+func npc_max_active() -> int:
+	var dificuldade: int = ENVIRONMENTS.get(current_environment_id, {}).get("difficulty", 1)
+	return int(traffic_max_visible_by_difficulty.get(dificuldade, traffic_min_visible))
 
 func _ready() -> void:
 	_build_tuning_groups()

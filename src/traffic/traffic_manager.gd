@@ -38,6 +38,19 @@ var _cronometro_spawn: float = 0.0
 ## Habilitação do spawn (FR-024).
 var _habilitado: bool = true
 
+## Validador de nascimento do SPEC-006 (FR-028, contrato
+## spawn_validation.md). `null` preserva o caminho legado do SPEC-004
+## (faixa única da velocidade, nenhuma consulta) — é o que os testes de
+## SPEC-001–005 enxergam, garantindo a regressão SC-016.
+var validador: NpcCollisionSystem = null
+
+## Candidato adiado para o quadro seguinte (FR-029, Clarificação Q3):
+## `{"categoria": TrafficData}`. Revalidado a cada quadro em `update()` com
+## as posições atualizadas até nascer; nunca descartado até o próximo
+## intervalo de spawn — a reposição abaixo de `traffic_min_visible` fica
+## intacta (FR-063, SC-010).
+var _spawn_pendente: Dictionary = {}
+
 const VIEWPORT_HEIGHT: float = 480.0
 
 ## Folga numérica somada ao espaçamento mínimo (FR-019, SC-006).
@@ -116,6 +129,11 @@ func update(delta: float, road: Road) -> void:
 
 	if active_vehicles.size() >= maximo:
 		_cronometro_spawn = 0.0
+	elif not _spawn_pendente.is_empty():
+		# FR-029 / Clarificação Q3: o adiado revalida A CADA QUADRO, com o y
+		# e as posições recomputados — o cronômetro fica intacto enquanto
+		# ele espera (adiamento por quadro, nunca até o próximo intervalo).
+		_tentar_spawn(road, na_pista <= minimo, _spawn_pendente.get("categoria") as TrafficData)
 	elif na_pista <= minimo:
 		_cronometro_spawn = 0.0
 		_tentar_spawn(road, true)
@@ -124,6 +142,12 @@ func update(delta: float, road: Road) -> void:
 		if _cronometro_spawn >= GameConfig.traffic_spawn_interval:
 			_cronometro_spawn = 0.0
 			_tentar_spawn(road, false)
+
+
+## O candidato adiado em `update()`, ou dicionário vazio quando não há
+## pendente — superfície de introspecção para os testes de FR-029/SC-010.
+func spawn_pendente() -> Dictionary:
+	return _spawn_pendente
 
 
 ## Margem acima do topo da tela que já conta como "na estrada" para a meta de
@@ -214,12 +238,20 @@ var active_vehicles_snapshot: Array[TrafficVehicle]:
 # Spawn
 # ---------------------------------------------------------------------------
 
-func _tentar_spawn(road: Road, em_enchimento: bool = false) -> void:
-	# I1 / FR-005: nunca acima do limite configurado.
+## Tenta nascer um veículo na altura `y`. Com `categoria_adiada` (FR-029) a
+## categoria vem do pendente em vez do sorteio — é a revalidação do quadro
+## seguinte, com o y e as posições dos ativos já atualizados.
+func _tentar_spawn(
+	road: Road, em_enchimento: bool = false, categoria_adiada: TrafficData = null
+) -> void:
+	# I1 / FR-005 / FR-042: o teto continua ANTES da validação de spawn
+	# (contrato spawn_validation.md §Garantias).
 	if active_vehicles.size() >= GameConfig.traffic_max_vehicles:
 		return
 
-	var categoria: TrafficData = _sortear_categoria()
+	var categoria: TrafficData = categoria_adiada
+	if categoria == null:
+		categoria = _sortear_categoria()
 	if categoria == null:
 		return
 
@@ -251,22 +283,48 @@ func _tentar_spawn(road: Road, em_enchimento: bool = false) -> void:
 		return
 
 	var veiculo: TrafficVehicle = _obter_do_pool()
-	# Faixa reservada da velocidade (ajuste 5): valida a separação retangular
-	# e a ordenação do corredor; sem faixa livre, adia o spawn (o cronômetro já
-	# foi zerado).
-	var lane: float = _sortear_faixa_separada(categoria, y, min_x, max_x)
-	if lane < 0.0:
+
+	if validador == null:
+		# Caminho legado do SPEC-004 (SC-016): faixa única da velocidade,
+		# sem consulta — nada muda para quem não liga o validador.
+		var lane: float = _sortear_faixa_separada(categoria, y, min_x, max_x)
+		if lane < 0.0:
+			return
+		_nascer(veiculo, categoria, lane, y, bounds)
 		return
-	veiculo.activate(categoria, lane, y)
-	veiculo.position.x = lane
+
+	# FR-028/FR-029: a faixa pretendida primeiro, depois as demais da mais
+	# próxima. Cada candidata passa pelas regras do SPEC-004 (separação e
+	# ordenação do corredor) e pelo validador do SPEC-006; esgotadas todas,
+	# o nascimento é ADIADO — a próxima chamada (o quadro seguinte) revalida.
+	for x in _faixas_candidatas(categoria, min_x, max_x):
+		if not _separacao_respeitada(categoria, x, y):
+			continue
+		if not _ordenacao_valida(categoria, x, y):
+			continue
+		var resultado: Dictionary = validador.validar_spawn(categoria, x, y, bounds)
+		if bool(resultado.aceito):
+			_spawn_pendente = {}
+			_nascer(veiculo, categoria, float(resultado.x), float(resultado.y), bounds)
+			return
+	_spawn_pendente = {"categoria": categoria}
+
+
+## Ponto único de nascimento (legado e validado): ativa, posiciona, coloca na
+## cena se preciso e registra no conjunto ativo com o sinal de spawn.
+func _nascer(
+	veiculo: TrafficVehicle, categoria: TrafficData, x: float, y: float, bounds: Dictionary
+) -> void:
+	veiculo.activate(categoria, x, y)
+	veiculo.position.x = x
 	veiculo.previous_right_boundary = bounds.get("right", 0.0)
-	# O nó já tem este manager como pai: veio do pool, ou foi criado e anexado em
-	# `_obter_do_pool`. Anexar de novo aqui causaria erro de reparenting.
+	# O nó já tem este manager como pai: veio do pool, ou foi criado e anexado
+	# em `_obter_do_pool`. Anexar de novo aqui causaria erro de reparenting.
 	if veiculo.get_parent() != self:
 		add_child(veiculo)
-
 	active_vehicles.append(veiculo)
 	vehicle_spawned.emit(veiculo)
+
 
 
 ## Sorteio ponderado pela frequência (FR-010, FR-023, T017).
@@ -332,18 +390,56 @@ func _espaco_longo_insuficiente(y: float) -> bool:
 ## compartilham um corredor: o comboio vira estruturalmente impossível e as
 ## categorias lentas nascem toda vez que a própria faixa está livre, sem
 ## starving (FR-007, FR-019, FR-023).
-func _slot_da_categoria(categoria: TrafficData, min_x: float, max_x: float) -> float:
+## Velocidades máximas distintas entre as categorias, em ordem crescente —
+## a base do mapeamento velocidade → faixa reservada (ajuste 5).
+func _velocidades_distintas() -> Array[float]:
 	var distintas: Array[float] = []
 	for id in categories:
 		var velocidade: float = categories[id].max_speed
 		if not distintas.has(velocidade):
 			distintas.append(velocidade)
 	distintas.sort()
+	return distintas
+
+
+## Todas as posições de faixa da pista: uma por velocidade distinta, índice
+## 0 = mais rápido = extremo esquerdo (ajuste 5, FR-007).
+func _faixas_por_velocidade(min_x: float, max_x: float) -> Array[float]:
+	var distintas := _velocidades_distintas()
+	if distintas.size() <= 1:
+		return [(min_x + max_x) * 0.5]
+	var faixas: Array[float] = []
+	for ordem in distintas.size():
+		faixas.append(min_x + (max_x - min_x) * float(ordem) / float(distintas.size() - 1))
+	return faixas
+
+
+func _slot_da_categoria(categoria: TrafficData, min_x: float, max_x: float) -> float:
+	var distintas := _velocidades_distintas()
 	if distintas.size() <= 1:
 		return (min_x + max_x) * 0.5
 	# Índice 0 = mais rápido = extremo esquerdo da pista.
 	var ordem: int = distintas.size() - 1 - distintas.find(categoria.max_speed)
-	return min_x + (max_x - min_x) * float(ordem) / float(distintas.size() - 1)
+	return _faixas_por_velocidade(min_x, max_x)[ordem]
+
+
+## FR-029 — candidatas laterais de um nascimento: a faixa reservada da
+## própria velocidade primeiro; depois as demais, da mais próxima da
+## pretendida. Ordem determinística (research R9) — nenhuma aleatoriedade
+## na escolha da alternativa.
+func _faixas_candidatas(categoria: TrafficData, min_x: float, max_x: float) -> Array[float]:
+	var propria: float = _slot_da_categoria(categoria, min_x, max_x)
+	var ordenadas: Array[float] = [propria]
+	var resto: Array[float] = []
+	for x in _faixas_por_velocidade(min_x, max_x):
+		if is_equal_approx(x, propria):
+			continue
+		resto.append(x)
+	resto.sort_custom(
+		func(a: float, b: float) -> bool: return absf(a - propria) < absf(b - propria)
+	)
+	ordenadas.append_array(resto)
+	return ordenadas
 
 
 ## Devolve a faixa da categoria, ou -1 se ela não respeitar a separação mínima
