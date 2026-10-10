@@ -439,3 +439,21 @@ Com mais de uma pessoa, após a Foundational:
 - [X] T070 [P] Atualização documental: clarificações de 2026-10-05, emendas de FR-019/FR-023, FR-063/FR-064, SC-006/SC-028/SC-029 e caso de borda em `specs/004-traffic-and-decoration/spec.md`; nota de revalidação nos checklists; ponteiros nos `quickstart.md` das duas specs
 - [X] T071 Ajuste 5 — travamento de velocidade entre categorias: faixas laterais reservadas por velocidade (`_slot_da_categoria`) na origem do nascimento, corredor lateral = interseção das projeções laterais em `_lider_mais_proximo()` e piso de espaçamento size-aware (meias-alturas + separação) em `_espaco_min_centros()` de `src/traffic/traffic_manager.gd`; invariante do teste de 10 min (`tests/unit/test_memory_stability.gd`) passa a contar pares apenas com projeções intersectadas e suíte nova `tests/unit/test_traffic_speed_ordering.gd` (colunas ordenadas, caminhão livre na taxa da categoria, separação size-aware durante o movimento) per FR-019, FR-065, SC-006, SC-030
 - [X] T072 [P] Atualização documental do ajuste 5: clarificações, FR-065, SC-030, caso de borda "Faixa da velocidade ocupada no nascimento" e emendas de FR-019/SC-006/SC-029 em `specs/004-traffic-and-decoration/spec.md`; contagens e ponteiros nos `quickstart.md` das duas specs, checklist da SPEC-004, tabela de ajustes do `plan.md` da SPEC-005 e `AGENTS.md`
+
+---
+
+## Phase 14: Reajuste de assets de veículos (2026-10-10)
+
+> Reajuste de arte do usuário: conteúdo dos 14 PNGs de NPC normalizado dentro do mesmo
+> canvas — 32×64 nas 3 categorias de carros e 32×128 no caminhão (inalterado), o que
+> preserva o contrato de tamanho da tabela de categorias (data-model §2) e o espaçamento
+> derivado dele (`garantir_size` mede o canvas, que não mudou). Correção de naming:
+> `carro_01png` → `carro_01.png` (o `TRAFFIC_CATEGORIES["passeio"]` e as specs exigem
+> `carro_01`). `*.import` regenerados. Sonda headless de 4000 nascimentos com a
+> semântica do pool (cache de textura por categoria — FR-017): os 17 assets carregam e
+> o sorteio é uniforme (Carro-prata 12,1% ≈ 1/7 dos utilitários, ~3,5% de todos os
+> veículos — presença confirmada no aceite manual do usuário após ~10 min).
+> Suíte completa: 41 suítes, 259 casos verdes (exit 101).
+
+- [X] T073 Normalizar o conteúdo dos assets em `assets/npcs/**` (bbox alfa ~22 px de largura centrado no canvas), renomear `assets/npcs/passeio/carro_01png` → `carro_01.png` e regenerar os `*.import` per data-model §2, FR-011, FR-012
+- [X] T074 [P] Atualização documental: §Trânsito do `README.md` (normalização e uniformidade do sorteio), Phase 14 da SPEC-005 (recalibração das hitboxes ao novo bbox visível) e nota no `AGENTS.md`

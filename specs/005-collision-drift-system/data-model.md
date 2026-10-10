@@ -42,7 +42,7 @@ Transições: `NORMAL --(colisão válida)--> IMPACTO --(instante)--> DRIFT --(d
 | `dimensoes` | Vector2 (largura, altura) | jogador: configuração própria; NPC: por categoria (FR-007) |
 | derivação | configuração → `Rect2(centro − dim/2, dim)` | jogador segue o mesmo padrão de `TrafficVehicle.get_occupied_area()` |
 
-Valores iniciais derivados da área visual atual com margens laterais reduzidas (Assumptions); alterar sprite não altera hitbox (SC-009).
+Valores iniciais derivados da área visual atual com margens laterais reduzidas (Assumptions); alterar sprite não altera hitbox (SC-009). Recalibração 2026-10-10 (reajuste de arte — conteúdo normalizado no canvas): jogador 22×44, passeio 22×38, utilitário 22×38, esporte 22×46, caminhão 30×64 (sprite não reajustado); derivação documentada no comentário de `GameConfig.player_hitbox_size`/`NPC_HITBOX_SIZES`.
 
 ## 4. Deslocamento de Ultrapassagem do NPC (NpcOvertakeState)
 

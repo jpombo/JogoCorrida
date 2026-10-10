@@ -1,31 +1,34 @@
 <!--
 Sync Impact Report:
-- Version change: 1.1.0 → 2.0.0
-- Bump rationale: MAJOR. Dois princípios MUST foram redefinidos, o que é
-  incompatível com implementações que-os conforme a redação anterior:
-  (1) §Traffic — o MUST "have collision detection" foi reescrito para exigir que
-      o veículo de trânsito forneça identificação, posição e área ocupada, com a
-      detecção e a resolução de colisão atribuídas ao SPEC-005;
-  (2) §VI Multilingual Support — en-US deixa de ser exigido imediatamente e passa a
-      depender de uma especificação dedicada de localização, com pt-BR como
-      língua de autoria.
-  A tradução integral para pt-BR (abaixo) não altera força normativa; é
-  preenchimento de exigência do próprio §VI.
+- Version change: 2.0.0 → 3.0.0
+- Bump rationale: MAJOR. Dois enunciados normativos foram redefinidos para
+  resolver os conflitos CRITICAL identificados pelo /speckit.analyze da
+  SPEC-007 (Sistema de Combustível), conforme §Governança ("specs que conflitem
+  com um MUST MUST ser corrigidas na spec, no plano ou nas tasks — nunca por
+  reinterpretação"; a correção escolhida foi a emenda):
+  (1) §Comportamento de Colisão — o MUST "consumir combustível adicional" passa
+      a valer segundo a penalidade configurável do ambiente vigente, admitindo
+      valor zero em planície e deserto como alavanca de progressão prevista em
+      §Dificuldade;
+  (2) §Sistema de Combustível — a falha ao zerar o combustível é mantida como
+      obrigação (MUST), com o sinal único de esgotamento a cargo do sistema de
+      combustível e a transição de estado a cargo do sistema central de estado
+      de jogo, podendo ser entregue por especificação posterior (SPEC-008).
 - Modified principles:
-  - "Traffic" → "Trânsito" (MUST de detecção de colisão reescopado para SPEC-005)
-  - "Multilingual Support and Documentation Language" → "Suporte Multilíngue e
-    Língua da Documentação" (en-US diferido para spec de localização dedicada)
-- Added sections: nenhuma seção nova. Três notas de escopo foram acrescentadas
-  dentro de seções existentes (§Traffic, §VI, §Governança).
-- Removed sections: nenhuma
-- Modified sections (tradução pt-BR, sem mudança normativa):
-  Core Principles, Core Gameplay Rules, Development Strategy and Quality Standards,
-  Git and Commit Discipline, Governance
-- Follow-up TODOs: nenhum token de placeholder retido. Dívida conhecida registrada:
-  a especificação de localização para en-US ainda não existe e é pré-requisito
-  para satisfazer integralmente o §VI.
-- Deferred intent: SPEC-004 (Trânsito e Decoração) permanece bloqueada apenas por
-  esta emenda; nenhuma feature foi implementada neste comando.
+  - "Comportamento de Colisão" (item MUST de combustível adicional qualificado
+    pela penalidade configurável por ambiente)
+  - "Sistema de Combustível" (frase normativa de falha reescrita como dois MUST
+    com responsabilidades e entrega escalonada explicitadas)
+- Added sections: nenhuma.
+- Removed sections: nenhuma.
+- Follow-up TODOs: nenhum token de placeholder retido. Dívida conhecida mantida:
+  en-US depende da especificação dedicada de localização (§VI); e o chamado de
+  GAME_OVER ao sinal `fuel_depleted` fica com a SPEC-008, registrado no plan.md
+  da SPEC-007 (Complexity Tracking).
+- Deferred intent: SPEC-007 (Sistema de Combustível) — esta emenda remove as
+  duas barreiras de implementação apontadas pelo /speckit.analyze; nenhuma
+  feature foi implementada neste comando.
+- Ratificação: 2026-09-18 (imutável) | Última emenda: 2026-10-10.
 -->
 
 # Constituição do JogoCorrida
@@ -133,7 +136,10 @@ simulador de corrida realista.
 Uma colisão com outro veículo MUST NOT resultar imediatamente em Game Over. Uma
 colisão MUST produzir uma consequência perceptível de jogabilidade. No mínimo, uma
 colisão MUST: reduzir a velocidade do veículo; produzir um efeito temporário de
-deriva/deslizamento; consumir combustível adicional; fornecer feedback visual;
+deriva/deslizamento; consumir combustível adicional segundo a penalidade
+configurável do ambiente vigente, admitindo valor zero em ambientes iniciais
+(planície e deserto) como alavanca de progressão prevista em §Dificuldade;
+fornecer feedback visual;
 fornecer feedback sonoro quando o áudio for implementado. O efeito de deriva MUST
 ser configurável e isolado da lógica principal de controle do veículo. O sistema de
 colisão MUST suportar balanceamento futuro sem exigir mudanças arquiteturais.
@@ -148,7 +154,10 @@ configurável. No mínimo: fuel_capacity, fuel_consumption_rate,
 collision_fuel_penalty. O consumo de combustível SHOULD ser influenciado pelo
 movimento do veículo. O sistema MUST impedir que os valores de combustível se
 tornem negativos. Quando o combustível chega a zero, o veículo não pode mais
-prosseguir normalmente e o jogo entra no estado de falha apropriado. O sistema de
+prosseguir normalmente: o sistema de combustível MUST emitir um sinal único de
+esgotamento e o jogo MUST entrar no estado de falha apropriado, com a transição
+realizada pelo sistema central de estado de jogo (§Estado de Jogo) — que pode ser
+entregue por uma especificação posterior à do sistema de combustível. O sistema de
 combustível MUST ser independente da interface de usuário. A UI SHOULD observar o
 sistema de combustível em vez de modificar diretamente seu estado interno.
 
@@ -338,4 +347,4 @@ correção da spec.
 implementado; a especificação de localização dedicada é pré-requisito para
 satisfazer integralmente o §VI. Nenhuma feature pode ser bloqueada por essa dívida.
 
-**Version**: 2.0.0 | **Ratifiada**: 2026-09-18 | **Última Emenda**: 2026-10-02
+**Version**: 3.0.0 | **Ratifiada**: 2026-09-18 | **Última Emenda**: 2026-10-10

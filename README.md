@@ -35,10 +35,14 @@ JogoCorrida/
 │   │   ├── npc_collision_system.gd # Contato, previsão, cadeia, cooldown e validação de spawn (SPEC-006)
 │   │   ├── npc_chain_state.gd    # Cadeia dominó: id, profundidade, timeout, processados (SPEC-006)
 │   │   └── npc_drift_state.gd    # Fases do drift do NPC, sem mudança de velocidade (SPEC-006)
-│   └── decoration/
-│       ├── decoration_data.gd    # Elemento da biblioteca (repeatable, weight)
-│       ├── decoration_manager.gd # Biblioteca por ambiente, profundidades, sorteio
-│       └── decoration_element.gd # Sprite decorativo (sem colisão)
+│   ├── decoration/
+│   │   ├── decoration_data.gd    # Elemento da biblioteca (repeatable, weight)
+│   │   ├── decoration_manager.gd # Biblioteca por ambiente, profundidades, sorteio
+│   │   └── decoration_element.gd # Sprite decorativo (sem colisão)
+│   ├── fuel/
+│   │   └── fuel_system.gd        # Tanque: consumo, penalidade por ambiente e eventos (SPEC-007)
+│   └── ui/
+│       └── fuel_hud.gd           # Barra + rótulo de combustível, somente observador (SPEC-007)
 ├── assets/
 │   ├── background/               # Backgrounds por ambiente (640x480)
 │   ├── decoracao/                # Decoração por ambiente (planice, deserto, floresta, gelo)
@@ -51,7 +55,8 @@ JogoCorrida/
 │   ├── 003-environment-scenarios/
 │   ├── 004-traffic-and-decoration/
 │   ├── 005-collision-drift-system/
-│   └── 006-npc-collision-system/
+│   ├── 006-npc-collision-system/
+│   └── 007-fuel-system/
 └── tests/unit/                   # Testes unitários (GdUnit4)
 ```
 
@@ -93,6 +98,7 @@ JogoCorrida/
 
 - Spawn por frequência relativa (`traffic_frequency_<categoria>`), com limite de veículos, espaçamento longitudinal e pool reutilizável próprio
 - Veículos nascem fora da área visível e são reciclados por qualquer borda
+- **Assets de NPC normalizados (2026-10-10)**: os 17 PNGs mantêm o canvas do contrato (32×64; caminhão 32×128) com o conteúdo centrado e margens — o espaçamento derivado do tamanho não muda; o sorteio de texturas por categoria é uniforme (sonda de 4000 nascimentos: Carro-prata ~1/7 dos utilitários)
 - **Sem colisão com o jogador**: nenhum objeto do spec tem corpo de física (FR-026, FR-049) — a colisão é tratada pelo SPEC-005 por hitbox
 - Cada veículo expõe os 6 atributos de FR-002 — tipo, posição, velocidade, **direção**, faixa e estado — mais a área ocupada (`get_vehicles_data()`)
 - Faixas laterais **reservadas por velocidade** no nascimento (rápidas à esquerda, lentas à direita), com o espaçamento do limitador derivado das meias-alturas e o comboio considerando apenas o líder do mesmo corredor (ajustes 1, 2 e 5 — FR-019/FR-065, SC-029/SC-030). **Dívida conhecida** (registrada na SPEC-006): o recuo de faixa do nascimento e a convergência ao estreitar a pista ainda podem dividir o corredor entre velocidades distintas
@@ -114,7 +120,7 @@ JogoCorrida/
 
 ### SPEC-005: Sistema de Colisão e Drift
 
-- **Detecção por hitbox retangular** independente do sprite (hitbox do jogador e tamanhos por categoria de NPC configuráveis)
+- **Detecção por hitbox retangular** independente do sprite (hitbox do jogador e tamanhos por categoria de NPC configuráveis, derivados do conteúdo visível dos sprites e recalibrados em 2026-10-10)
 - **3 tipos de colisão** (FR-002): jogador atinge a traseira do NPC; colisão lateral; NPC atinge a traseira do jogador — cada um com suas consequências, precedidos de cooldown por par
 - **Perda de velocidade do jogador** dentro de intervalo configurável, nunca abaixo de zero (SC-003); o NPC **nunca perde velocidade** em nenhuma colisão (FR-017, Out of Scope)
 - **Drift do jogador** em 3 fases (impacto → drift → recuperação): direção decidida pelo lado relativo com margem neutra determinística, força/duração configuráveis, resposta lateral reduzida a 40% durante o drift e recuperação gradual a 100% (SC-004)
@@ -134,6 +140,15 @@ JogoCorrida/
 - **Evento informativo** com 7 campos para observadores futuros; nada mais é alterado (FR-041)
 - **Clarify 2026-10-09 (trânsito real — FR-046, ainda não implementado)**: o espaçamento mínimo do SPEC-004 cede, durante o movimento, entre velocidades diferentes na mesma trajetória até o contato (é o que torna a US1 alcançável naturalmente); no nascimento e entre pares de mesma velocidade o espaçamento permanece. A causa dos relatos DESERT/FOREST foi reproduzida pela sonda `test_traffic_corridor_probe.gd` (só-reporta) e a dívida de nascimento/convergência da SPEC-004 está registrada na spec.
 
+### SPEC-007: Sistema de Combustível
+
+- **Tanque com consumo contínuo** durante a partida: taxa por segundo que cresce com a velocidade (modelo linear configurável com piso, teto e fator de velocidade) e usa o consumo em repouso no zero de velocidade — independente da taxa de quadros (FR-004–FR-010)
+- **Colisão com consequência por ambiente**: PLAINS/DESERT sem perda adicional; FOREST/ICE com perda fixa idêntica entre os dois e entre 2% e 10% da capacidade, acumulativa por evento e sem retroatividade (FR-011–FR-017)
+- **Eventos exatamente 1× por ocorrência**: `fuel_depleted` na primeira atingida de zero (qualquer origem, nunca valor negativo) e `fuel_low` na travessia do limiar, ambos com latch rearmedo só na nova partida (FR-018–FR-024)
+- **HUD somente observador**: barra em retângulos planos (escala inteira) com proporção sempre igual ao tanque, cor trocada e rótulo estático **"BAIXO"** (texto vindo de `GameConfig.fuel_low_label`) enquanto durar a condição — a UI nunca modifica o combustível (FR-025, Clarificação B)
+- **Inicialização exclusivamente em READY → PLAYING**: pausar e retomar não recarrega o tanque (FR-002/FR-003)
+- **Balanceamento 100% via configuração** (`fuel_*` + `collision_fuel_penalty`), sem nenhum número fixo na lógica e sem tocar em física, estados ou colisão (FR-026–FR-030); sem Game Over nesta spec (fronteira para a SPEC-008)
+
 ## Configuração
 
 - Resolução: 640x480 (pixel art)
@@ -147,21 +162,22 @@ Tudo é configurável em `src/config/game_config.gd` (autoload `GameConfig`):
 
 - **Trânsito**: `traffic_enabled`, `traffic_max_vehicles`, `traffic_spawn_distance`/`_variance`, `traffic_spawn_interval`/`_filling`, `traffic_min_spacing`, `traffic_min_separation`, `traffic_min_visible`, `traffic_max_visible_by_difficulty`, `traffic_spawn_fill_distance` e `traffic_frequency_<categoria>`
 - **Decoração**: `decoration_enabled`, `decoration_density`, `decoration_spacing_min/max`, `decoration_depth_count/spacing`, `decoration_scale`, `decoration_safety_margin`, `decoration_tree_repeat_limit`
-- **Colisão e drift do jogador**: `collision_speed_loss_min/max`, `drift_force_min/max`, `drift_duration_min/max`, `drift_control_factor`, `drift_recovery_rate`, `collision_cooldown_time`, `collision_neutral_margin`, `collision_intensity_divisor`, `npc_overtake_magnitude`/`_duration`/`_return_duration`, `collision_accel_lockout_time`, `player_hitbox_size` e `NPC_HITBOX_SIZES`
+- **Colisão e drift do jogador**: `collision_speed_loss_min/max`, `drift_force_min/max`, `drift_duration_min/max`, `drift_control_factor`, `drift_recovery_rate`, `collision_cooldown_time`, `collision_neutral_margin`, `collision_intensity_divisor`, `npc_overtake_magnitude`/`_duration`/`_return_duration`, `collision_accel_lockout_time`, `player_hitbox_size` e `NPC_HITBOX_SIZES` (hitboxes derivadas do bbox visível: jogador 22×44, passeio/utilitário 22×38, esporte 22×46, caminhão 30×64)
 - **Colisão entre NPCs (SPEC-006)**: `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_drift_duration_min/max`, `npc_drift_recovery_rate`, `npc_relative_position_threshold`, `npc_border_margin`, `npc_max_chain_depth`, `npc_chain_timeout`, `npc_displacement_limit`, `npc_spawn_safety_distance`, `npc_collision_prediction_horizon`, `npc_min_relative_speed`, `npc_active_area_margin`, `npc_reevaluation_interval` e `npc_player_speed_change_threshold`
+- **Combustível (SPEC-007)**: `fuel_capacity`, `fuel_initial_amount`, `fuel_consumption_idle`, `fuel_consumption_min`/`_max`/`_speed_factor`, `fuel_low_threshold`, `fuel_low_label` e `collision_fuel_penalty` (penalidade por ambiente)
 - Bibliotecas: `TRAFFIC_CATEGORIES` (velocidade, pasta, assets, frequência) e `DECORATION_LIBRARIES` (`asset`, `repeatable`, `weight`)
 - Agrupamentos somente leitura para o futuro SPEC-008: `traffic_tuning` e `decoration_tuning`
 
 ## Testes
 
-35 suítes GdUnit4 em `tests/unit/`, **214 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution v2.0.0):
+41 suítes GdUnit4 em `tests/unit/`, **259 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution v3.0.0):
 
 ```bash
 GODOT_BIN=<caminho do godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit
 # tudo verde quando o runner sai com exit 101
 ```
 
-Cobertura principal: 9 suítes de colisão NPC×NPC (`npc_*_test.gd`, SPEC-006), 8 de colisão do jogador (`collision_*_test.gd`, SPEC-005), trânsito (incluindo a sonda de corredor `test_traffic_corridor_probe.gd`, **só-reporta** — evidências A/B/D da pendência FR-046 — e a regressão de textura de NPCs), decoração, estrada, ambiente, física do jogador, performance, regressão do SPEC-004 e constituição.
+Cobertura principal: 6 suítes de combustível (`fuel_*_test.gd`, SPEC-007), 9 suítes de colisão NPC×NPC (`npc_*_test.gd`, SPEC-006), 8 de colisão do jogador (`collision_*_test.gd`, SPEC-005), trânsito (incluindo a sonda de corredor `test_traffic_corridor_probe.gd`, **só-reporta** — evidências A/B/D da pendência FR-046 — e a regressão de textura de NPCs), decoração, estrada, ambiente, física do jogador, performance, regressão do SPEC-004 e constituição.
 
 Relatórios gerados em `reports/` (ignorados pelo git). Abra o editor Godot uma vez por máquina antes do headless para gerar os `*.import` dos assets.
 

@@ -288,3 +288,19 @@ US1 (MVP) → US3 (ultrapassagem, maior valor visual) → US2 (lateral) → US4 
 - [X] T056 [P] Atualização documental do ajuste 5: clarificações, FR-065, SC-030 e caso de borda em `specs/004-traffic-and-decoration/spec.md`; clarificação de redirecionamento em `specs/005-collision-drift-system/spec.md`; tabela de ajustes e contagens em `plan.md`, `quickstart.md` (ambas as specs), checklist da SPEC-004 e `AGENTS.md`
 - [X] T057 Ajuste 6 — retorno do NPC à faixa após a ultrapassagem: `npc_overtake_return_duration` em `src/config/game_config.gd`; fases IDA/RETORNO com `x_origem` em `src/collision/npc_overtake_state.gd`; retorno clampado nos limites vigentes + encerramento ao reocupar a origem em `src/traffic/traffic_vehicle.gd::_aplicar_overtake` (captura do `x_origem` em `apply_overtake_offset`); `tests/unit/collision_overtake_test.gd` atualizado para ida+retorno e +2 casos (`test_overtake_returns_to_original_lane`, `test_overtake_clamped_out_still_returns_to_lane`) per FR-019, FR-021, SC-014
 - [X] T058 [P] Atualização documental do ajuste 6: clarificações (bug de velocidades + sinal da regra mantido), FR-019/FR-021/FR-035, SC-014, caso de borda e entidade Key em `specs/005-collision-drift-system/spec.md`; contrato `contracts/consumed_apis.md` §4 (v1.2), `data-model.md` §4/§5, `plan.md`, `quickstart.md`, checklist da SPEC-005 e contagens em `AGENTS.md`
+
+---
+
+## Phase 14: Recalibração de hitboxes pós-reajuste de assets (2026-10-10)
+
+> Reajuste de arte do usuário: conteúdo dos sprites do jogador (`azul`/`vermelho`) e dos
+> NPCs normalizado dentro do mesmo canvas (32×64; caminhão 32×128 — contrato da SPEC-004
+> preservado); sprites de drift do jogador (`*_drift_direita/esquerda.png`) removidos por
+> não terem nenhuma referência em código, specs ou docs. As hitboxes, derivadas
+> originalmente da área visual, foram recalibradas ao novo bbox visível per FR-006/FR-007/
+> FR-008 — a independência sprite↔hitbox é mantida, só os valores da config mudam.
+> Suíte completa ao final: 41 suítes, 259 casos verdes (exit 101).
+
+- [X] T059 [P] Recalibrar `player_hitbox_size` (24×40 → 22×44) e `NPC_HITBOX_SIZES` (passeio 24×42 → 22×38, utilitário 24×44 → 22×38, esporte 26×38 → 22×46; caminhão 30×64 inalterado — sprite não reajustado) em `src/config/game_config.gd`, com a derivação (bbox alfa médio por categoria) documentada no comentário per FR-006, FR-007, FR-008
+- [X] T060 Ajustar os testes que embutiam a geometria antiga: `tests/unit/collision_cooldown_test.gd` (realinha o jogador à geometria original antes do recontato — o drift do 1º impacto derrubava o dx para fora da hitbox nova; o alvo é o cooldown por par, não a deriva) e `tests/unit/npc_collision_bounds_test.gd` (limites do `esporte` no corredor estreito, limite da transição e contato inicial derivados de `NPC_HITBOX_SIZES` em vez das constantes 13/313/331/261) per SC-006, SC-007, US5-CA3
+- [X] T061 [P] Atualização documental: recalibração e valores em `data-model.md` §3; §Hitboxes e Configuração no `README.md`; Phase 14 e nota no `AGENTS.md`

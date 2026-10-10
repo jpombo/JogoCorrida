@@ -8,6 +8,7 @@ extends Node2D
 @onready var background_layer = $BackgroundLayer
 @onready var decoration_layer = $DecorationLayer
 @onready var traffic_layer = $TrafficLayer
+@onready var fuel_hud = $FuelHudLayer/FuelHudRoot
 
 ## GameState (autoload)
 var game_state = GameState
@@ -30,6 +31,12 @@ var collision_system: CollisionSystem = CollisionSystem.new()
 ## separado; consome os ativos do trânsito e os limites por altura, e só
 ## escreve em `position.x` dos envolvidos via drift (FR-017).
 var npc_collision_system: NpcCollisionSystem = NpcCollisionSystem.new()
+
+## Sistema de combustível (SPEC-007, FR-004/FR-018): componente próprio
+## (constitution §III). Instanciado aqui para que `_on_state_changed` dependa
+## apenas deste campo — sem referências de cena — e seja testável sem a árvore
+## (SC-001, research R4).
+var fuel_system: FuelSystem = FuelSystem.new()
 
 func _ready() -> void:
 	# Conectar signals do GameState
@@ -72,6 +79,16 @@ func _ready() -> void:
 		)
 
 	_propagar_ambiente(GameConfig.current_environment_id)
+
+	# SPEC-007 / FR-011, R12: a colisão do jogador (1 evento por contato
+	# válido — SPEC-005) desconta combustível, com a penalidade lida no
+	# momento do evento; sem deduplicação própria (FR-013).
+	collision_system.collision_occurred.connect(fuel_system.on_player_collision)
+
+	# SPEC-007 / T016: o HUD observa desde a origem; `setup` idempotente (H4).
+	# Nulo apenas se a cena não tiver a camada (testes sem a árvore).
+	if fuel_hud:
+		fuel_hud.setup(fuel_system)
 
 	# Iniciar no MENU
 	game_state.reset()
@@ -161,13 +178,26 @@ func _process(_delta: float) -> void:
 				_delta, player_vehicle, traffic_layer.active_vehicles_snapshot,
 				Callable(road, "get_boundaries_for_player_y")
 			)
+
+		# SPEC-007 / FR-004, R12: consumo contínuo DEPOIS da colisão do quadro
+		# (a penalidade já foi descontada em `on_player_collision`), apenas no
+		# ramo PLAYING (FR-002, research R4).
+		if fuel_system and player_vehicle:
+			fuel_system.update(_delta, player_vehicle.get_speed())
 	
 	# Retomar com Escape quando pausado
 	elif game_state.current_state == game_state.State.PAUSED:
 		if Input.is_action_just_pressed("ui_cancel"):
 			game_state.resume_game()
 
-func _on_state_changed(new_state: int, _old_state: int) -> void:
+func _on_state_changed(new_state: int, old_state: int) -> void:
+	# SPEC-007 / FR-002, SC-001: o tanque re-inicializa EXCLUSIVAMENTE na
+	# virada READY → PLAYING (uma vez por partida); PAUSED → PLAYING preserva
+	# o saldo (research R4). Depende só do campo `fuel_system` — testável sem
+	# a árvore de cena (T004).
+	if old_state == game_state.State.READY and new_state == game_state.State.PLAYING:
+		fuel_system.reset()
+
 	match new_state:
 		game_state.State.MENU:
 			_show_menu()

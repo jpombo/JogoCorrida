@@ -89,6 +89,9 @@ func test_new_collision_only_after_separation_and_new_contact() -> void:
 	npc.position = Vector2(200.0, 100.0)
 	for i in 5:
 		sistema.update(1.0 / 60.0, jogador, [npc], _bounds)
+	# O primeiro impacto deslocou o jogador pelo drift; realinha à geometria
+	# original — o alvo deste teste é o cooldown por par, não a deriva lateral.
+	jogador.position = Vector2(320.0, 400.0)
 	npc.position = Vector2(320.0, 364.0)
 	jogador.controller.speed = 100.0
 	sistema.update(1.0 / 60.0, jogador, [npc], _bounds)

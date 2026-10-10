@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
-## T066 / Constitution v2.0.0 §Governança — regressão dos dois princípios MUST
-## redefinidos pela emenda v2.0.0 (ratificada 2026-09-18, emendada 2026-10-02):
+## T066 / Constitution v3.0.0 §Governança — regressão dos princípios MUST
+## redefinidos pelas emendas v2.0.0 (ratificada 2026-09-18, emendada 2026-10-02)
+## e v3.0.0 (emendada 2026-10-10, /speckit.analyze da SPEC-007):
 ##
 ## 1. §Trânsito — o veículo de trânsito MUST fornecer identificação, posição e
 ##    área ocupada, e MUST NOT detectar nem resolver colisões; a detecção e a
@@ -9,9 +10,15 @@ extends GdUnitTestSuite
 ## 2. §VI Suporte Multilíngue — pt-BR é a língua de autoria e padrão; en-US foi
 ##    diferido para uma spec dedicada de localização e nenhuma feature pode ser
 ##    bloqueada por essa dívida; textos de usuário SHOULD estar externalizados.
+## 3. §Comportamento de Colisão (v3.0.0) — consumir combustível adicional vale
+##    segundo a penalidade configurável do ambiente vigente, admitindo valor
+##    zero em planície e deserto (alavanca de §Dificuldade).
+## 4. §Sistema de Combustível (v3.0.0) — ao zerar, o sistema MUST emitir sinal
+##    único de esgotamento e o jogo MUST entrar no estado de falha, com a
+##    transição a cargo do sistema central de estado de jogo (SPEC-008).
 ##
 ## O procedimento de emenda (§Governança) pede este arquivo quando a alteração
-## afeta um MUST verificável — ambos os itens acima são verificáveis.
+## afeta um MUST verificável — os itens acima são verificáveis.
 
 const CONSTITUTION_PATH: String = "res://.specify/memory/constitution.md"
 
@@ -24,11 +31,11 @@ func _texto_da_constitution() -> String:
 	return FileAccess.get_file_as_string(CONSTITUTION_PATH)
 
 
-## A emenda v2.0.0 está registrada e versionada no próprio documento.
-func test_constitution_is_v200_in_pt_br() -> void:
+## A emenda v3.0.0 está registrada e versionada no próprio documento.
+func test_constitution_is_v300_in_pt_br() -> void:
 	var texto: String = _texto_da_constitution()
-	assert_str(texto).contains("**Version**: 2.0.0").override_failure_message(
-		"§Governança: versão 2.0.0 não registrada"
+	assert_str(texto).contains("**Version**: 3.0.0").override_failure_message(
+		"§Governança: versão 3.0.0 não registrada"
 	)
 	assert_str(texto).contains("Português do Brasil (pt-BR)").override_failure_message(
 		"§VI: pt-BR deixou de ser a língua de autoria declarada"
@@ -38,6 +45,35 @@ func test_constitution_is_v200_in_pt_br() -> void:
 	)
 	assert_str(texto).contains("SPEC-005").override_failure_message(
 		"§Trânsito: a detecção/resolução de colisão foi atribuída ao SPEC-005; a atribuição sumiu"
+	)
+
+
+## Emenda v3.0.0 (1): §Comportamento de Colisão — o MUST de combustível
+## adicional está qualificado pela penalidade configurável do ambiente, com
+## valor zero admitido em planície e deserto.
+func test_collision_consumes_fuel_per_environment_penalty() -> void:
+	var texto: String = _texto_da_constitution()
+	assert_str(texto).contains("consumir combustível adicional segundo a penalidade").override_failure_message(
+		"§Comportamento de Colisão: o MUST de combustível adicional perdeu a qualificação por ambiente (emenda v3.0.0)"
+	)
+	assert_str(texto).contains("admitindo valor zero em ambientes iniciais").override_failure_message(
+		"§Comportamento de Colisão: a exceção de penalidade zero em planície/deserto sumiu (emenda v3.0.0)"
+	)
+
+
+## Emenda v3.0.0 (2): §Sistema de Combustível — sinal único de esgotamento
+## (sistema de combustível) + estado de falha (sistema central de estado de
+## jogo), com entrega escalonada permitida a spec posterior.
+func test_depletion_signals_and_state_failure_stays_must() -> void:
+	var texto: String = _texto_da_constitution()
+	assert_str(texto).contains("MUST emitir um sinal único de").override_failure_message(
+		"§Sistema de Combustível: o MUST do sinal único de esgotamento sumiu (emenda v3.0.0)"
+	)
+	assert_str(texto).contains("MUST entrar no estado de falha apropriado").override_failure_message(
+		"§Sistema de Combustível: o MUST de estado de falha foi diluído (emenda v3.0.0)"
+	)
+	assert_str(texto).contains("sistema central de estado de jogo (§Estado de Jogo)").override_failure_message(
+		"§Sistema de Combustível: a responsabilidade da transição voltou a ficar ambígua (emenda v3.0.0)"
 	)
 
 

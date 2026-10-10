@@ -119,17 +119,28 @@ func test_no_space_transfers_drift_to_causador() -> void:
 
 	for i in 60:
 		sistema.update(1.0 / 60.0, [caminhao, esporte], bounds_estreitos)
-		# SC-006: ambos dentro da área trafegável do corredor estreito.
-		assert_float(caminhao.position.x).is_greater_equal(315.0).override_failure_message(
+		# SC-006: ambos dentro da área trafegável do corredor estreito
+		# (limites com a meia-largura vigente de cada categoria, do config).
+		var meia_caminhao: float = GameConfig.NPC_HITBOX_SIZES["caminhao"].x * 0.5
+		var meia_esporte: float = GameConfig.NPC_HITBOX_SIZES["esporte"].x * 0.5
+		assert_float(caminhao.position.x).is_greater_equal(
+			300.0 + meia_caminhao
+		).override_failure_message(
 			"SC-006: quadro %d — atingido saiu pela esquerda do corredor" % i
 		)
-		assert_float(caminhao.position.x).is_less_equal(329.0).override_failure_message(
+		assert_float(caminhao.position.x).is_less_equal(
+			344.0 - meia_caminhao
+		).override_failure_message(
 			"SC-006: quadro %d — atingido saiu pela direita do corredor" % i
 		)
-		assert_float(esporte.position.x).is_greater_equal(313.0).override_failure_message(
+		assert_float(esporte.position.x).is_greater_equal(
+			300.0 + meia_esporte
+		).override_failure_message(
 			"SC-006: quadro %d — causador saiu pela esquerda do corredor" % i
 		)
-		assert_float(esporte.position.x).is_less_equal(331.0).override_failure_message(
+		assert_float(esporte.position.x).is_less_equal(
+			344.0 - meia_esporte
+		).override_failure_message(
 			"SC-006: quadro %d — causador saiu pela direita do corredor" % i
 		)
 	assert_float(esporte.position.x).is_less(314.0).override_failure_message(
@@ -172,8 +183,12 @@ func test_displacement_never_exceeds_configured_limit() -> void:
 ## puxado de volta para dentro conforme o corredor encolhe, e zero quadros
 ## com posição fora dos limites vigentes.
 func test_transition_bounds_respected_every_frame() -> void:
+	var meia_esporte: float = GameConfig.NPC_HITBOX_SIZES["esporte"].x * 0.5
 	var caminhao := _npc("caminhao", Vector2(340.0, 200.0))
-	var esporte := _npc("esporte", Vector2(313.0, 240.0))
+	# Contato inicial com 1 px de sobreposição — derivado das meias-larguras.
+	var esporte := _npc(
+		"esporte", Vector2(340.0 - (15.0 + meia_esporte) + 1.0, 240.0)
+	)
 	var encolhendo: bool = true
 
 	for i in 110:
@@ -196,13 +211,15 @@ func test_transition_bounds_respected_every_frame() -> void:
 		assert_float(caminhao.position.x).is_greater_equal(263.0).override_failure_message(
 			"SC-006: quadro %d — atingido ultrapassou a borda esquerda" % i
 		)
-		var limite_esporte: float = _direita_transicao - 13.0
+		var limite_esporte: float = _direita_transicao - meia_esporte
 		assert_float(esporte.position.x).is_less_equal(
 			limite_esporte + 0.001
 		).override_failure_message(
 			"SC-007: quadro %d — causador além do limite vigente" % i
 		)
-		assert_float(esporte.position.x).is_greater_equal(261.0).override_failure_message(
+		assert_float(esporte.position.x).is_greater_equal(
+			248.0 + meia_esporte
+		).override_failure_message(
 			"SC-006: quadro %d — causador ultrapassou a borda esquerda" % i
 		)
 

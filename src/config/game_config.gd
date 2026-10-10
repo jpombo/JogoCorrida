@@ -245,16 +245,19 @@ var DECORATION_PATHS: Dictionary = {
 ## Divisor de normalização da intensidade (velocidade relativa → 0..1, R8)
 @export var collision_intensity_divisor: float = 100.0
 
-## Hitbox do jogador (largura x altura, centrada na posição) — independente do sprite (FR-006)
-@export var player_hitbox_size: Vector2 = Vector2(24.0, 40.0)
+## Hitbox do jogador (largura x altura, centrada na posição) — independente do sprite (FR-006).
+## Derivada do bbox visível (conteúdo alfa) de azul.png/vermelho.png: 22x44 px.
+@export var player_hitbox_size: Vector2 = Vector2(22.0, 44.0)
 
 ## Hitboxes por categoria de NPC (independentes dos sprites — FR-007, FR-008).
 ## Categoria ausente cai no retângulo de `get_occupied_area()` como fallback.
+## Derivadas da média do bbox visível por categoria (canvas 32x64, caminhão 32x128):
+## passeio/utilitário 22x38 (36–43), esporte 22x46 (44–48), caminhão 30x64 (inalterado).
 var NPC_HITBOX_SIZES: Dictionary = {
 	"caminhao": Vector2(30.0, 64.0),
-	"utilitario": Vector2(24.0, 44.0),
-	"passeio": Vector2(24.0, 42.0),
-	"esporte": Vector2(26.0, 38.0),
+	"utilitario": Vector2(22.0, 38.0),
+	"passeio": Vector2(22.0, 38.0),
+	"esporte": Vector2(22.0, 46.0),
 }
 
 ## Agrupamentos de parâmetros expostos ao SPEC-008 (FR-061, data-model.md §8).
@@ -412,3 +415,46 @@ func _build_tuning_groups() -> void:
 		"decoration_safety_margin": decoration_safety_margin,
 		"decoration_tree_repeat_limit": decoration_tree_repeat_limit,
 	}
+
+# ---------------------------------------------------------------------------
+# SPEC-007 — Sistema de Combustível
+# ---------------------------------------------------------------------------
+# Todos os parâmetros de combustível são ajustáveis sem alteração da lógica
+# central (FR-026/FR-027, SC-016, constitution §IV); nenhum valor de
+# balanceamento pode aparecer fixo em fuel_system.gd. As sementes abaixo são
+# provisionais e serão calibradas por testes de gameplay (FR-028, SC-018/SC-019).
+
+## Capacidade máxima do tanque (unidade abstrata de combustível) — FR-001.
+@export var fuel_capacity: float = 100.0
+
+## Quantidade inicial do tanque. Sentinela -1.0 = tanque cheio; qualquer outro
+## valor é limitado ao intervalo [0, capacidade] — FR-003, SC-002.
+@export var fuel_initial_amount: float = -1.0
+
+## Consumo por segundo com o veículo em repouso (velocidade zero) — FR-009.
+@export var fuel_consumption_idle: float = 0.0
+
+## Consumo mínimo/máximo durante a movimentação e fator com que a velocidade
+## influencia o consumo: taxa = min + normalização × fator, com teto no máximo
+## (modelo linear configurado — FR-006/FR-007).
+@export var fuel_consumption_min: float = 0.6
+@export var fuel_consumption_max: float = 2.0
+@export var fuel_consumption_speed_factor: float = 1.4
+
+## Limite de combustível baixo, como fração da capacidade (menor ou igual) —
+## FR-022.
+@export var fuel_low_threshold: float = 0.2
+
+## Penalidade de colisão por ambiente (unidade abstrata). Chave ausente cai em
+## 0.0 (ambiente sem cadastro = sem risco) — FR-011, FR-016. Sementes:
+## PLAINS/DESERT 0; FOREST/ICE iguais e pequenos (3% do tanque de 100) — SC-019.
+@export var collision_fuel_penalty: Dictionary = {
+	"PLAINS": 0.0,
+	"DESERT": 0.0,
+	"FOREST": 3.0,
+	"ICE": 3.0,
+}
+
+## Texto do rótulo de alerta do HUD (§VI: texto de usuário externalizado,
+## sem literal no script) — FR-025.
+@export var fuel_low_label: String = "BAIXO"
