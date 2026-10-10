@@ -147,7 +147,7 @@ description: "Task list template for feature implementation"
 **Purpose**: Regressão, validação ponta a ponta e documentação
 
 - [X] T019 [P] Run suíte completa `GODOT_BIN=<godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit` e corrigir regressões — esperado exit 101, 35 suítes existentes + 6 novas = 41, zero falha das SPECs 001–006 (SC-017)
-- [ ] T020 Run validação manual de quickstart.md (10 passos no editor Godot) e registrar ajustes de calibração/visual — SC-001, SC-008…SC-015, bordas observáveis
+- [X] T020 Run validação manual de quickstart.md (10 passos no editor Godot) e registrar ajustes de calibração/visual — SC-001, SC-008…SC-015, bordas observáveis (validado em 2026-10-10 pelo usuário — as 4 fases percorridas sem problema; nenhum ajuste de calibração/visual necessário; Carro-prata confirmado após ~10 min)
 - [X] T021 [P] Review de conformidade em src/fuel/fuel_system.gd e src/ui/fuel_hud.gd: 0 números de balance fixos na lógica (FR-026), 0 literal de texto de usuário (§VI — só `GameConfig.fuel_low_label`), comentários em pt-BR (§VI), nenhuma escrita fora do domínio do combustível (FR-029/FR-030)
 - [X] T022 [P] Update AGENTS.md seção "Estado atual" (+ README.md se listar specs concluídas) marcando SPEC-007 como implementada, seguindo o padrão das SPECs anteriores
 
