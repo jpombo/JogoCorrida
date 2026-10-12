@@ -352,3 +352,14 @@ Com múltiplos agentes:
 
 - [X] T057 [US1] Destaque da opção ativa no menu em src/ui/ui_manager.gd: retângulo semitransparente (`ColorRect` branco ~18%) atrás da opção selecionada — "Selecionar veículo" + nome (opção 0) ou "Iniciar corrida" (opção 1); navegação `ui_up`/`ui_down` com `_opcao_menu`, `ui_accept` emite `start_race` apenas com a opção "Iniciar corrida" destacada; destaque reaplicado a cada troca e ao (re)entrar em MENU — contracts/ui_commands.md §3
 - [X] T058 [US2] Banda `INÍCIO`/`CHEGADA` apresentada imediatamente ao iniciar em src/game/gameplay_manager.gd: `_show_ready()` cria os marcadores na entrada em `READY` (antes só nasciam após o timer de 1 s, na virada `READY → PLAYING` via `_reset_corrida`, que continua recriando-os — idempotente) — contracts/game_state_transitions.md §3
+
+---
+
+## Phase 14: Convergence
+
+- [X] T059 Preparar a apresentação ao iniciar corrida pelo menu já na entrada em `READY` em src/game/gameplay_manager.gd (`_on_start_race`/`_show_ready`): indicador de distância em `0,0 km / total` e medidor de combustível na carga inicial da corrida ANTES do timer de 1 s — hoje o caminho do menu não prepara nada e o READY exibe estado residual da corrida anterior (valor antigo ou vazio), só zerando na virada `READY → PLAYING` via `_reset_corrida`; o caminho de reinício (`_on_restart_race`) e os marcadores (T058) já antecipam — reaproveitar o reset idempotente per FR-009, FR-018, quickstart passo 2 (partial)
+- [X] T060 Congelar o processamento do jogador enquanto o estado for `MENU` em src/game/gameplay_manager.gd (`_show_menu` → `player_vehicle.set_process(false)`), com religamento consistente no fluxo de corrida (`_show_playing` já religa) — hoje `VehicleController._process` continua processando input e mutando velocidade/posição em segundo plano no menu (e o carro se move durante o READY após acelerar no menu), comportamento inconsistente com o caminho pós-vitória/game over, que chega ao menu com o process já desligado per US1/AC1, FR-036 (partial)
+
+## Phase 15: Convergence
+
+- [X] T061 Atualizar a documentação dos pontos de chamada do reset após T059: docstring de `_reset_corrida` em src/game/gameplay_manager.gd (hoje lista só a virada `READY → PLAYING` e o reinício imediato T022) e `contracts/game_state_transitions.md` §3, incluindo a nova chamada na preparação do fluxo menu → READY (`_on_start_race`) per contracts/game_state_transitions.md §3 (partial)

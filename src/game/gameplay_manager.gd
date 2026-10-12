@@ -277,8 +277,10 @@ func _avaliar_transicoes() -> void:
 
 
 ## Reset completo e idempotente da corrida (SPEC-008, FR-003/FR-035, R10).
-## Chamado na virada READY → PLAYING (largada) e pelo reinício imediato
-## (T022). Conexões de sinais NUNCA são refeitas aqui (SC-012).
+## Chamado na preparação do fluxo menu → READY (`_on_start_race`, T059), na
+## virada READY → PLAYING e pelo reinício imediato (`_on_restart_race`,
+## T022); `go_to_menu` NÃO o chama (usa o reset de encerramento embutido).
+## Conexões de sinais NUNCA são refeitas aqui (SC-012).
 func _reset_corrida() -> void:
 	# Capacidade derivada da corrida (Clarificação de capacidade, R3) ANTES
 	# do reset — alterar track_total_distance muda o tanque automaticamente.
@@ -319,6 +321,12 @@ func _reset_corrida() -> void:
 ## (FR-001/FR-005).
 func _on_start_race() -> void:
 	_aplicar_sprite_selecionado()
+	# T059 / FR-009 + FR-018: preparar a apresentação já no menu → READY —
+	# indicador zerado (0,0 km / total) e tanque na carga inicial ANTES do
+	# timer de 1 s. Sem isto o READY exibia o estado residual da corrida
+	# anterior (ou vazio na 1ª corrida) até a virada READY → PLAYING. Mesmo
+	# reset idempotente do reinício (R10/SC-012): a virada re-executa.
+	_reset_corrida()
 	game_state.start_game()
 
 
@@ -372,10 +380,11 @@ func _on_go_to_menu() -> void:
 func _on_state_changed(new_state: int, old_state: int) -> void:
 	# SPEC-007 / FR-002, SC-001 + SPEC-008 / FR-003: o reset COMPLETO da
 	# corrida (tanque derivado, progressão, marcadores, galões, trânsito,
-	# colisões, decoração, veículo, estrada) acontece EXCLUSIVAMENTE na
-	# virada READY → PLAYING — uma vez por partida; PAUSED → PLAYING preserva
-	# o saldo (research R4/R10). Depende só dos campos dos sistemas —
-	# testável sem a árvore de cena.
+	# colisões, decoração, veículo, estrada) é idempotente e já roda na
+	# preparação (menu/restart → READY, T059/T022); aqui a virada
+	# READY → PLAYING o re-executa como normalização final — uma vez por
+	# partida; PAUSED → PLAYING preserva o saldo (research R4/R10).
+	# Depende só dos campos dos sistemas — testável sem a árvore de cena.
 	if old_state == game_state.State.READY and new_state == game_state.State.PLAYING:
 		_reset_corrida()
 
@@ -394,10 +403,16 @@ func _on_state_changed(new_state: int, old_state: int) -> void:
 			_show_game_over()
 
 func _show_menu() -> void:
+	# T060 / US1 AS1 + FR-036: nada processa input em segundo plano no menu —
+	# congela o jogador como já fazem pausa/fim. Sem isto o VehicleController
+	# seguia mutando velocidade/posição invisível (e o carro se movia durante
+	# o READY após acelerar no menu). _show_playing religa (mesmo caminho do
+	# pós-vitória/game over, que chega aqui já congelado).
+	if player_vehicle:
+		player_vehicle.set_process(false)
+		player_vehicle.visible = false
 	if road:
 		road.visible = false
-	if player_vehicle:
-		player_vehicle.visible = false
 	if track_layer:
 		track_layer.visible = false
 	if items_layer:
