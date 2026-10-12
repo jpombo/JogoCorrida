@@ -1,8 +1,9 @@
 extends GdUnitTestSuite
 
-## T066 / Constitution v3.0.0 §Governança — regressão dos princípios MUST
-## redefinidos pelas emendas v2.0.0 (ratificada 2026-09-18, emendada 2026-10-02)
-## e v3.0.0 (emendada 2026-10-10, /speckit.analyze da SPEC-007):
+## T066 / Constitution v3.0.1 §Governança — regressão dos princípios MUST
+## redefinidos pelas emendas v2.0.0 (ratificada 2026-09-18, emendada 2026-10-02),
+## v3.0.0 (emendada 2026-10-10, /speckit.analyze da SPEC-007) e v3.0.1
+## (emendada 2026-10-11, padronização "constitution"→"constituição", PATCH):
 ##
 ## 1. §Trânsito — o veículo de trânsito MUST fornecer identificação, posição e
 ##    área ocupada, e MUST NOT detectar nem resolver colisões; a detecção e a
@@ -23,7 +24,7 @@ extends GdUnitTestSuite
 const CONSTITUTION_PATH: String = "res://.specify/memory/constitution.md"
 
 
-## Lê a constitution; falha com mensagem clara quando o arquivo some ou muda de lugar.
+## Lê a constituição; falha com mensagem clara quando o arquivo some ou muda de lugar.
 func _texto_da_constitution() -> String:
 	assert_bool(FileAccess.file_exists(CONSTITUTION_PATH)).is_true().override_failure_message(
 		"Constitution ausente em %s" % CONSTITUTION_PATH
@@ -31,11 +32,11 @@ func _texto_da_constitution() -> String:
 	return FileAccess.get_file_as_string(CONSTITUTION_PATH)
 
 
-## A emenda v3.0.0 está registrada e versionada no próprio documento.
-func test_constitution_is_v300_in_pt_br() -> void:
+## A emenda v3.0.1 está registrada e versionada no próprio documento.
+func test_constitution_is_v301_in_pt_br() -> void:
 	var texto: String = _texto_da_constitution()
-	assert_str(texto).contains("**Version**: 3.0.0").override_failure_message(
-		"§Governança: versão 3.0.0 não registrada"
+	assert_str(texto).contains("**Version**: 3.0.1").override_failure_message(
+		"§Governança: versão 3.0.1 não registrada"
 	)
 	assert_str(texto).contains("Português do Brasil (pt-BR)").override_failure_message(
 		"§VI: pt-BR deixou de ser a língua de autoria declarada"

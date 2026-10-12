@@ -1,5 +1,20 @@
 <!--
-Sync Impact Report:
+Sync Impact Report (v3.0.1 — 2026-10-11):
+- Version change: 3.0.0 → 3.0.1
+- Bump rationale: PATCH. Padronização do anglicismo "constitution" (usado como
+  substantivo) para "constituição" em todo o corpo do documento e alinhamento à
+  própria §VI ("TODA a documentação ... incluindo esta constituição ... MUST ser
+  mantida em Português do Brasil"), além de ajustes cosméticos de quebra de linha
+  nos Princípios Centrais I–VI (já em pt-BR). Nenhum MUST/SHOULD, título,
+  identificador ou significado normativo foi alterado; a validação de regressão
+  tests/unit/test_constitution.gd foi atualizada apenas no número de versão
+  assertado.
+- Modified principles: nenhum em conteúdo normativo; I–VI receberam apenas
+  ajustes cosméticos de redação/quebra. Nenhuma redefinição de princípio.
+- Added sections: nenhuma. Removed sections: nenhuma.
+- Follow-up TODOs: nenhum.
+
+Histórico anterior:
 - Version change: 2.0.0 → 3.0.0
 - Bump rationale: MAJOR. Dois enunciados normativos foram redefinidos para
   resolver os conflitos CRITICAL identificados pelo /speckit.analyze da
@@ -37,7 +52,7 @@ Sync Impact Report:
 
 ### I. Controles Simples, Gameplay Profundo
 
-O jogador deve entender o jogo imediatamente através de quatro controles
+O jogador deve entender o jogo imediatamente por meio de quatro controles
 principais: Acelerar, Frear, Mover para a Esquerda e Mover para a Direita. O
 desafio deve vir do trânsito, da velocidade, das colisões, da deriva, do
 combustível e da distância — não de controles complicados nem de sistemas de jogo
@@ -47,11 +62,11 @@ princípio orientador principal do projeto.
 ### II. Prioridade da Experiência do Jogador
 
 Quando duas decisões de implementação entram em conflito, aplica-se a ordem de
-prioridade: (1) experiência do jogador, (2) jogabilidade central, (3) simplicidade,
-(4) manutenibilidade, (5) testabilidade, (6) performance, (7) polimento visual,
-(8) sofisticação técnica. A sofisticação técnica nunca deve ser priorizada sobre uma
-implementação de jogabilidade simples e confiável. Este princípio governa todas as
-decisões de arquitetura e de feature.
+prioridade: (1) experiência do jogador, (2) jogabilidade central, (3)
+simplicidade, (4) manutenibilidade, (5) testabilidade, (6) performance, (7)
+polimento visual, (8) sofisticação técnica. A sofisticação técnica nunca deve ser
+priorizada sobre uma implementação de jogabilidade simples e confiável. Este
+princípio governa todas as decisões de arquitetura e de feature.
 
 ### III. Arquitetura Modular
 
@@ -79,7 +94,7 @@ central.
 
 Este documento é a restrição primária de design e arquitetura para o
 desenvolvimento assistido por IA. Agentes de IA devem verificar a consistência
-com esta constitution antes de implementar qualquer feature. As seguintes features
+com esta constituição antes de implementar qualquer feature. As seguintes features
 estão FORA DE ESCOPO salvo aprovação explícita: armas, combate, multijogador,
 serviços online, progressão de personagem, mecânicas de RPG, customização
 complexa de veículos, simulação realista de veículos, exploração de mundo aberto,
@@ -90,17 +105,18 @@ assumidas pelo agente de IA.
 
 ### VI. Suporte Multilíngue e Língua da Documentação
 
-O jogo MUST ter **Português do Brasil (pt-BR)** como língua de autoria e padrão, e
-deve passar a suportar **Inglês dos EUA (en-US)** por meio de uma especificação
-dedicada de localização. Até que essa especificação exista, pt-BR é a única língua
-obrigatória para texto voltado ao usuário, e nenhuma feature MUST ser bloqueada
-por ausência de strings em en-US. O suporte a en-US MUST ser planejado: features
-que introduzam texto de usuário SHOULD manter os textos externalizados, sem
-embutir literais nos scripts, para permitir a localização futura sem refatoração.
+O jogo MUST ter **Português do Brasil (pt-BR)** como língua de autoria e padrão,
+e deve passar a suportar **Inglês dos EUA (en-US)** por meio de uma especificação
+dedicada de localização. Até que essa especificação de localização exista, pt-BR
+é a única língua obrigatória para texto voltado ao usuário, e nenhuma feature
+MUST ser bloqueada por ausência de strings em en-US. O suporte a en-US MUST ser
+planejado: features que introduzam texto de usuário SHOULD manter os textos
+externalizados, sem embutir literais nos scripts, para permitir a localização
+futura sem refatoração.
 
 Para desenvolvimento, TODA a documentação escrita, comentários, mensagens de
 commit e comunicações de projeto MUST ser mantidas em Português do Brasil (pt-BR).
-Isso se aplica a todos os artefatos do projeto, **incluindo esta constitution**,
+Isso se aplica a todos os artefatos do projeto, **incluindo esta constituição**,
 specs, planos, tasks e quaisquer entregáveis escritos. Isso garante comunicação
 consistente entre a equipe e alinha o projeto à identidade cultural e linguística
 do projeto.
@@ -235,8 +251,8 @@ sonoros, Música, polimento de UI, Efeitos).
 
 Agentes de IA são assistentes de desenvolvimento e MUST NOT redefinir
 autonomamente o design do jogo. Antes de implementar uma feature, o agente MUST
-verificar se ela é consistente com esta constitution. Se uma implementação
-solicitada entrar em conflito com a constitution, o agente MUST identificar o
+verificar se ela é consistente com esta constituição. Se uma implementação
+solicitada entrar em conflito com a constituição, o agente MUST identificar o
 conflito antes de modificar a arquitetura. O agente MUST priorizar: convenções
 existentes do projeto, componentes reutilizáveis existentes, soluções simples,
 soluções modulares, mudanças mínimas. O agente MUST evitar abstração desnecessária.
@@ -298,7 +314,7 @@ configuração e MUST NOT ser deduzida do nome do arquivo em tempo de execução
 Uma feature é considerada concluída SOMENTE quando: a implementação funciona; a
 funcionalidade existente continua funcionando; os testes automatizados relevantes
 passam; nenhum erro evidente está presente em execução; a implementação segue esta
-constitution; nenhuma complexidade arquitetural desnecessária foi introduzida; o
+constituição; nenhuma complexidade arquitetural desnecessária foi introduzida; o
 diff Git contém apenas mudanças relacionadas à tarefa.
 
 ## Disciplina de Git e Commit
@@ -313,15 +329,15 @@ gerados, arquivos temporários, arquivos específicos de IDE ou segredos.
 
 ## Governança
 
-Esta constitution é a restrição primária de design e arquitetura para este projeto
+Esta constituição é a restrição primária de design e arquitetura para este projeto
 em desenvolvimento assistido por IA. Ao implementar uma feature, o agente de IA
-MUST considerar esta constitution antes de tomar decisões de arquitetura ou de
-jogabilidade. O agente de IA MUST NOT alterar silenciosamente a constitution para
+MUST considerar esta constituição antes de tomar decisões de arquitetura ou de
+jogabilidade. O agente de IA MUST NOT alterar silenciosamente a constituição para
 acomodar uma implementação. Se um requisito não puder ser satisfeito sem violar a
-constitution, o conflito MUST ser reportado antes da implementação. A constitution
+constituição, o conflito MUST ser reportado antes da implementação. A constituição
 MAY evoluir, mas mudanças MUST ser intencionais, documentadas e versionadas.
 
-**Procedimento de emenda**: Alterações na constitution MUST passar por
+**Procedimento de emenda**: Alterações na constituição MUST passar por
 `/speckit.constitution`, MUST bumps de versão segundo a política abaixo, MUST gerar
 um Sync Impact Report no topo do arquivo e SHOULD incluir um teste de regressão em
 `tests/unit/test_constitution.gd` quando a alteração afetar um MUST verificável.
@@ -336,15 +352,15 @@ de ratificação é imutável; a data da última emenda é a data da alteração
 formato ISO AAAA-MM-DD.
 
 **Revisão de conformidade**: Todos os PRs/reviews devem verificar conformidade com
-esta constitution. Complexidade MUST ser justificada. Usar este documento como a
+esta constituição. Complexidade MUST ser justificada. Usar este documento como a
 referência primária para orientação de desenvolvimento em execução. Specs que
 conflitem com um MUST MUST ser corrigidas na spec, no plano ou nas tasks — nunca
 por reinterpretação do princípio. Uma spec em conflito é bloqueada para
-implementação até que o conflito seja resolvido por emenda da constitution ou por
+implementação até que o conflito seja resolvido por emenda da constituição ou por
 correção da spec.
 
 **Dívida Conhecida**: o suporte a en-US (inglês dos EUA) ainda não foi
 implementado; a especificação de localização dedicada é pré-requisito para
 satisfazer integralmente o §VI. Nenhuma feature pode ser bloqueada por essa dívida.
 
-**Version**: 3.0.0 | **Ratifiada**: 2026-09-18 | **Última Emenda**: 2026-10-10
+**Version**: 3.0.1 | **Ratifiada**: 2026-09-18 | **Última Emenda**: 2026-10-11

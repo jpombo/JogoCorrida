@@ -7,6 +7,9 @@
 [ext_resource type="Script" path="res://src/decoration/decoration_manager.gd" id="5_decoration"]
 [ext_resource type="Script" path="res://src/traffic/traffic_manager.gd" id="6_traffic"]
 [ext_resource type="Script" path="res://src/ui/fuel_hud.gd" id="7_fuelhud"]
+[ext_resource type="Script" path="res://src/track/track_markers.gd" id="8_trackmarkers"]
+[ext_resource type="Script" path="res://src/items/fuel_can_manager.gd" id="9_fuelcans"]
+[ext_resource type="Script" path="res://src/ui/ui_manager.gd" id="10_uimanager"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_car"]
 size = Vector2(32, 48)
@@ -72,3 +75,21 @@ offset_top = 22.0
 offset_right = 128.0
 offset_bottom = 40.0
 mouse_filter = 2
+
+[node name="TrackLayer" type="Node2D" parent="."]
+script = ExtResource("8_trackmarkers")
+
+[node name="ItemsLayer" type="Node2D" parent="."]
+script = ExtResource("9_fuelcans")
+
+[node name="UiLayer" type="CanvasLayer" parent="."]
+
+[node name="UIManagerRoot" type="Control" parent="UiLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("10_uimanager")

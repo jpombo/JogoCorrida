@@ -271,3 +271,27 @@ func get_right_boundary() -> float:
 
 func get_road_width() -> float:
 	return right_boundary - left_boundary
+
+
+## Reset de corrida (SPEC-008, FR-035, research R10): rolagem zerada, offset
+## zerado, sequência reiniciada e segmentos devolvidos ao trecho reto inicial
+## — o Road não rola sob pausa/menu nem guarda estado entre partidas. Sem
+## emissão de `segment_type_changed` aqui: o trânsito/NPC×NPC não precisa de
+## reavaliação num instante em que nada está em cena.
+func reset() -> void:
+	scroll_speed = 0.0
+	scroll_offset = 0.0
+	if GameConfig.test_track_sequence.size() > 0:
+		_load_track_sequence(GameConfig.test_track_sequence)
+	else:
+		track_index = 0
+		track_count = 0
+	for i in range(segment_pool.size()):
+		var sprite = segment_pool[i]
+		if straight_texture:
+			sprite.texture = straight_texture
+		segment_types[i] = 0
+		sprite.position.y = i * (segment_height + segment_spacing) - segment_height
+	left_boundary = GameConfig.road_left_boundary
+	right_boundary = GameConfig.road_right_boundary
+	boundary_changed.emit(left_boundary, right_boundary)

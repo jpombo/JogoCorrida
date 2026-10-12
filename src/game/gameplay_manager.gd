@@ -1,16 +1,25 @@
+class_name GameplayManager
 extends Node2D
 
-## Gerenciador de cena de gameplay — integra GameState com a cena
+## Gerenciador de cena de gameplay — integra GameState com a cena e orquestra
+## os sistemas da corrida (SPEC-008: progressão, estados, combustível,
+## galões). Componentes próprios por sistema (constitution §III); a ordem
+## canônica de atualização por quadro está no research R9 e no contrato
+## `game_state_transitions.md` (FR-017).
 
-## Referências
+## Referências de cena (TrackLayer/ItemsLayer/UiLayer são aditivos do SPEC-008;
+## `get_node_or_null` mantém testes sem a camada funcionando)
 @onready var road = $Road
 @onready var player_vehicle = $PlayerVehicle
 @onready var background_layer = $BackgroundLayer
 @onready var decoration_layer = $DecorationLayer
 @onready var traffic_layer = $TrafficLayer
 @onready var fuel_hud = $FuelHudLayer/FuelHudRoot
+@onready var track_layer = get_node_or_null("TrackLayer")
+@onready var items_layer = get_node_or_null("ItemsLayer")
+@onready var ui_root = get_node_or_null("UiLayer/UIManagerRoot")
 
-## GameState (autoload)
+## GameState (autoload) — único dono das transições (FR-001)
 var game_state = GameState
 
 ## Environment manager
@@ -37,6 +46,21 @@ var npc_collision_system: NpcCollisionSystem = NpcCollisionSystem.new()
 ## apenas deste campo — sem referências de cena — e seja testável sem a árvore
 ## (SC-001, research R4).
 var fuel_system: FuelSystem = FuelSystem.new()
+
+## Progressão da corrida (SPEC-008, FR-005…FR-008): componente próprio;
+## integrada pela velocidade de avanço, independente da rolagem (FR-007).
+var track_manager: TrackManager = TrackManager.new()
+
+## Seleção de veículo da sessão (SPEC-008, AS2/FR-002): padrão "azul";
+## só troca o sprite — nunca atributos (SC-001/SC-014).
+var _veiculo_selecionado: String = "azul"
+
+## Contagem de 1 s do READY → PLAYING (guarda contra timers duplicados).
+var _contagem_ready: bool = false
+
+## Emitido 1× quando a corrida termina em vitória ou em derrota (SC-005).
+signal race_won
+signal race_lost
 
 func _ready() -> void:
 	# Conectar signals do GameState
@@ -90,6 +114,19 @@ func _ready() -> void:
 	if fuel_hud:
 		fuel_hud.setup(fuel_system)
 
+	# SPEC-008: coleta de galão restaura via autoridade única do FuelSystem
+	# (R4/FR-033); UIManager observa e emite comandos (R12). Ambos idempotentes.
+	if items_layer:
+		items_layer.setup()
+		items_layer.fuel_can_collected.connect(fuel_system.restaurar)
+	if ui_root:
+		ui_root.setup(track_manager, game_state)
+		ui_root.start_race.connect(_on_start_race)
+		ui_root.select_next_vehicle.connect(_on_select_next_vehicle)
+		ui_root.continue_race.connect(_on_continue_race)
+		ui_root.restart_race.connect(_on_restart_race)
+		ui_root.go_to_menu.connect(_on_go_to_menu)
+
 	# Iniciar no MENU
 	game_state.reset()
 	_show_menu()
@@ -113,90 +150,234 @@ func _propagar_ambiente(id: String) -> void:
 	# re-propagá-lo para sempre.
 	_ambiente_propagado = id
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# FR-031 / T061: troca de ambiente em runtime (ex.: configuração ao vivo)
 	# propaga fundo e biblioteca de decoração sem exigir alteração de código.
 	if GameConfig.current_environment_id != _ambiente_propagado:
 		_propagar_ambiente(GameConfig.current_environment_id)
 
-	# Transição de MENU para READY ao pressionar Enter/Espaço
-	if game_state.current_state == game_state.State.MENU:
-		if Input.is_action_just_pressed("ui_accept"):
-			game_state.start_game()
-	
-	# Transição de READY para PLAYING após delay
-	elif game_state.current_state == game_state.State.READY:
-		await get_tree().create_timer(1.0).timeout
+	match game_state.current_state:
+		game_state.State.READY:
+			if not _contagem_ready and get_tree() != null:
+				_contagem_ready = true
+				_aguardar_inicio()
+		game_state.State.PLAYING:
+			_processar_playing(delta)
+		# MENU/PAUSED/VICTORY/GAME_OVER: a UI comanda via sinais; nenhum
+		# sistema avança (FR-004/FR-036, research R11).
+
+
+## Contagem de 1 s do READY; `begin_playing` no fim (a virada READY →
+## PLAYING dispara `_reset_corrida` — a largada limpa da corrida, R10).
+func _aguardar_inicio() -> void:
+	await get_tree().create_timer(1.0).timeout
+	_contagem_ready = false
+	if game_state.current_state == game_state.State.READY:
 		game_state.begin_playing()
-	
-	# Pausa com Escape
-	elif game_state.current_state == game_state.State.PLAYING:
-		if Input.is_action_just_pressed("ui_cancel"):
-			game_state.pause_game()
-		
-		# Atualizar scrolling da estrada com velocidade do veículo
+
+
+## Ramo PLAYING — ordem canônica de R9 (FR-017):
+## 1. rolagem da estrada e do fundo; 2. decoração → trânsito → NPC×NPC →
+## limites do jogador → colisão jogador×NPC; 3. galões; 4. combustível;
+## 5. progressão e marcadores; 6. transições; 7. flag de aceleração (R5).
+func _processar_playing(delta: float) -> void:
+	if Input.is_action_just_pressed("ui_cancel"):
+		game_state.pause_game()
+		return
+
+	# 1. Rolagem da estrada e do fundo
+	if player_vehicle and road:
+		road.update_scroll_speed(player_vehicle.get_speed())
+	if background_layer and road:
+		background_layer.update_scroll(road.scroll_speed, delta)
+
+	# 2. Decoração → trânsito → colisão NPC×NPC → limites → colisão do jogador
+	if decoration_layer and road:
+		decoration_layer.update(delta, road)
+	if traffic_layer and road:
+		traffic_layer.update(delta, road)
+		npc_collision_system.update(
+			delta,
+			traffic_layer.active_vehicles_snapshot,
+			Callable(road, "get_boundaries_for_player_y"),
+			road.scroll_speed
+		)
+	if player_vehicle and road:
+		var boundaries = road.get_boundaries_for_player_y(player_vehicle.position.y)
+		player_vehicle.controller.update_boundaries(boundaries.left, boundaries.right)
+	if player_vehicle and traffic_layer and road:
+		collision_system.update(
+			delta, player_vehicle, traffic_layer.active_vehicles_snapshot,
+			Callable(road, "get_boundaries_for_player_y")
+		)
+
+	# 3. Galões: movimento, reciclagem, geração e coleta ANTES do consumo
+	# (a restauração do quadro entra na conta do consumo — caso de borda 4).
+	if items_layer and road:
+		items_layer.update(
+			delta,
+			road,
+			traffic_layer.active_vehicles_snapshot if traffic_layer else [],
+			track_manager,
+			player_vehicle
+		)
+
+	# 4. Combustível (consumo após a restauração do quadro)
+	if fuel_system and player_vehicle:
+		fuel_system.update(delta, player_vehicle.get_speed())
+
+	# 5. Progressão e marcadores (mesma rolagem da estrada)
+	if player_vehicle:
+		track_manager.update(delta, player_vehicle.get_speed())
+	if track_layer and road:
+		track_layer.update(delta, road.scroll_speed)
+
+	# 6. Transições: vitória (cruzamento + combustível > 0); senão GAME_OVER
+	# se combustível zero e parado sem concluir (FR-013, FR-016).
+	_avaliar_transicoes()
+
+	# 7. Flag de bloqueio de aceleração derivada do valor PÓS-consumo (R5):
+	# sem latch — a coleta desbloqueia no mesmo instante em que o valor sobe.
+	if player_vehicle and player_vehicle.controller and fuel_system:
+		player_vehicle.controller.aceleracao_bloqueada_por_combustivel = (
+			fuel_system.get_atual() <= 0.0
+		)
+
+
+## Transição de vitória/derrota avaliada só no ramo PLAYING e uma vez por
+## corrida (`track_manager.esta_concluido()` + o no-op de `change_state` no
+## mesmo estado — SC-005/SC-007). A precedência do esgotamento sobre o
+## cruzamento no mesmo quadro vem da ordem de R9: o consumo (passo 4) roda
+## antes desta checagem (caso de borda 1).
+func _avaliar_transicoes() -> void:
+	if game_state.current_state != game_state.State.PLAYING:
+		return
+	if track_manager.esta_concluido():
+		return
+	var cruzou: bool = false
+	if track_layer != null and player_vehicle != null:
+		cruzou = track_layer.banda_completamente_cruzou(
+			player_vehicle.position.y, GameConfig.player_hitbox_size.y
+		)
+	if cruzou and fuel_system.get_atual() > 0.0:
+		track_manager.marcar_concluido()
+		# FR-031/SC-011: a corrida terminou — 0 galões ativos permanecem
+		# após qualquer encerramento (idempotente; largada/menu já limpam).
+		if items_layer:
+			items_layer.reset()
+		race_won.emit()
+		game_state.victory()
+		return
+	if fuel_system.get_atual() <= 0.0 and player_vehicle != null \
+			and player_vehicle.get_speed() <= 0.0:
+		if items_layer:
+			items_layer.reset()
+		race_lost.emit()
+		game_state.game_over()
+
+
+## Reset completo e idempotente da corrida (SPEC-008, FR-003/FR-035, R10).
+## Chamado na virada READY → PLAYING (largada) e pelo reinício imediato
+## (T022). Conexões de sinais NUNCA são refeitas aqui (SC-012).
+func _reset_corrida() -> void:
+	# Capacidade derivada da corrida (Clarificação de capacidade, R3) ANTES
+	# do reset — alterar track_total_distance muda o tanque automaticamente.
+	var estimado: float = (
+		GameConfig.track_total_distance * GameConfig.fuel_consumption_per_distance
+		+ GameConfig.fuel_safety_margin
+	)
+	fuel_system.definir_capacidade_derivada(estimado)
+	fuel_system.reset()
+
+	track_manager.setup(GameConfig.track_total_distance)
+	track_manager.reset()
+
+	if items_layer:
+		items_layer.reset()
+
+	if player_vehicle:
+		player_vehicle.reset()
+
+	if track_layer:
+		track_layer.reset()
 		if player_vehicle:
-			road.update_scroll_speed(player_vehicle.get_speed())
-
-		# Atualizar scrolling do background
-		if background_layer and road:
-			background_layer.update_scroll(road.scroll_speed, _delta)
-
-		# Hierarquia de atualização (FR-055, research.md R9).
-		# Os passos 3 e 4 só podem usar o scroll_speed do quadro corrente, então
-		# rodam depois de road._process, que é interno ao próprio Road.
-		# Decoração antes do trânsito: a decoração reposicionada não pode ser confundida
-		# com veículos na verificação visual de espaçamento (contrato §8).
-		if decoration_layer and road:
-			decoration_layer.update(_delta, road)
-
-		if traffic_layer and road:
-			traffic_layer.update(_delta, road)
-
-		# SPEC-006: colisão NPC×NPC depois do trânsito (posições finais do
-		# quadro) e ANTES do SPEC-005, para que um NPC já deslocado ocupe a
-		# posição final quando o detector do jogador for avaliar — SC-015
-		# observável no mesmo quadro do contato (T035, research R9).
-		if traffic_layer and road:
-			npc_collision_system.update(
-				_delta,
-				traffic_layer.active_vehicles_snapshot,
-				Callable(road, "get_boundaries_for_player_y"),
-				road.scroll_speed
+			track_layer.criar_marcadores(
+				player_vehicle.position.y, GameConfig.track_total_distance
 			)
 
-		# Atualizar limites baseado na posição Y do jogador
-		# Isso permite transições precisas em segmentos de expansão/redução
-		if player_vehicle and road:
-			var boundaries = road.get_boundaries_for_player_y(player_vehicle.position.y)
-			player_vehicle.controller.update_boundaries(boundaries.left, boundaries.right)
+	if road:
+		road.reset()
+	if traffic_layer:
+		traffic_layer.reset()
+	collision_system.reset()
+	npc_collision_system.reset()
+	if decoration_layer:
+		decoration_layer.reset()
 
-		# SPEC-005: colisão roda depois do trânsito (posições finais do quadro)
-		# e depois dos limites do jogador; usa os limites vigentes por altura.
-		if player_vehicle and traffic_layer and road:
-			collision_system.update(
-				_delta, player_vehicle, traffic_layer.active_vehicles_snapshot,
-				Callable(road, "get_boundaries_for_player_y")
-			)
 
-		# SPEC-007 / FR-004, R12: consumo contínuo DEPOIS da colisão do quadro
-		# (a penalidade já foi descontada em `on_player_collision`), apenas no
-		# ramo PLAYING (FR-002, research R4).
-		if fuel_system and player_vehicle:
-			fuel_system.update(_delta, player_vehicle.get_speed())
-	
-	# Retomar com Escape quando pausado
-	elif game_state.current_state == game_state.State.PAUSED:
-		if Input.is_action_just_pressed("ui_cancel"):
-			game_state.resume_game()
+## Comandos da UI (R12): a UI emite, o manager decide, o GameState transiciona
+## (FR-001/FR-005).
+func _on_start_race() -> void:
+	_aplicar_sprite_selecionado()
+	game_state.start_game()
+
+
+func _on_select_next_vehicle() -> void:
+	_veiculo_selecionado = "vermelho" if _veiculo_selecionado == "azul" else "azul"
+	_aplicar_sprite_selecionado()
+
+
+func _aplicar_sprite_selecionado() -> void:
+	if player_vehicle == null:
+		return
+	var caminho: String = (
+		GameConfig.alt_sprite_path if _veiculo_selecionado == "vermelho"
+		else GameConfig.default_sprite_path
+	)
+	player_vehicle.change_sprite(caminho)
+
+
+func _on_continue_race() -> void:
+	game_state.resume_game()
+
+
+func _on_restart_race() -> void:
+	# Reinício imediato (T022) + READY: a virada READY → PLAYING re-executa o
+	# reset — idempotente (R10/SC-012), a corrida nasce limpa de qualquer
+	# estado, inclusive de VICTORY/GAME_OVER.
+	_reset_corrida()
+	game_state.start_game()
+
+
+func _on_go_to_menu() -> void:
+	# "Voltar ao menu": mesmos resets do encerramento + esconder mundo;
+	# nenhum sistema continua avançando em segundo plano (FR-036, R10/R11).
+	if road:
+		road.reset()
+	if track_layer:
+		track_layer.reset()
+	if items_layer:
+		items_layer.reset()
+	if player_vehicle:
+		player_vehicle.reset()
+	if traffic_layer:
+		traffic_layer.reset()
+	collision_system.reset()
+	npc_collision_system.reset()
+	if decoration_layer:
+		decoration_layer.reset()
+	game_state.reset()
+
 
 func _on_state_changed(new_state: int, old_state: int) -> void:
-	# SPEC-007 / FR-002, SC-001: o tanque re-inicializa EXCLUSIVAMENTE na
-	# virada READY → PLAYING (uma vez por partida); PAUSED → PLAYING preserva
-	# o saldo (research R4). Depende só do campo `fuel_system` — testável sem
-	# a árvore de cena (T004).
+	# SPEC-007 / FR-002, SC-001 + SPEC-008 / FR-003: o reset COMPLETO da
+	# corrida (tanque derivado, progressão, marcadores, galões, trânsito,
+	# colisões, decoração, veículo, estrada) acontece EXCLUSIVAMENTE na
+	# virada READY → PLAYING — uma vez por partida; PAUSED → PLAYING preserva
+	# o saldo (research R4/R10). Depende só dos campos dos sistemas —
+	# testável sem a árvore de cena.
 	if old_state == game_state.State.READY and new_state == game_state.State.PLAYING:
-		fuel_system.reset()
+		_reset_corrida()
 
 	match new_state:
 		game_state.State.MENU:
@@ -207,21 +388,59 @@ func _on_state_changed(new_state: int, old_state: int) -> void:
 			_show_playing()
 		game_state.State.PAUSED:
 			_show_paused()
+		game_state.State.VICTORY:
+			_show_victory()
+		game_state.State.GAME_OVER:
+			_show_game_over()
 
 func _show_menu() -> void:
-	road.visible = false
-	player_vehicle.visible = false
-	print("MENU — Pressione Enter para iniciar")
+	if road:
+		road.visible = false
+	if player_vehicle:
+		player_vehicle.visible = false
+	if track_layer:
+		track_layer.visible = false
+	if items_layer:
+		items_layer.visible = false
 
 func _show_ready() -> void:
-	road.visible = true
-	player_vehicle.visible = true
-	print("READY — Prepare-se...")
+	if road:
+		road.visible = true
+	if player_vehicle:
+		player_vehicle.visible = true
+	if track_layer:
+		track_layer.visible = true
+		# A banda de INÍCIO (e a de CHEGADA) nasce JÁ no READY — antes o
+		# jogador só via o quadriculado após o timer de 1 s, quando a virada
+		# PLAYING recriava os marcadores no reset da largada.
+		if player_vehicle:
+			track_layer.reset()
+			track_layer.criar_marcadores(
+				player_vehicle.position.y, GameConfig.track_total_distance
+			)
+	if items_layer:
+		items_layer.visible = true
 
 func _show_playing() -> void:
-	player_vehicle.set_process(true)
-	print("PLAYING — Jogo iniciado!")
+	if player_vehicle:
+		player_vehicle.set_process(true)
 
 func _show_paused() -> void:
-	player_vehicle.set_process(false)
-	print("PAUSED — Jogo pausado")
+	if player_vehicle:
+		player_vehicle.set_process(false)
+	# FR-004 / R11: a rolagem é zerada na pausa — sem isso o Road._process
+	# reaplica a última scroll_speed e a estrada continuaria rolando.
+	if road:
+		road.update_scroll_speed(0.0)
+
+func _show_victory() -> void:
+	if player_vehicle:
+		player_vehicle.set_process(false)
+	if road:
+		road.update_scroll_speed(0.0)
+
+func _show_game_over() -> void:
+	if player_vehicle:
+		player_vehicle.set_process(false)
+	if road:
+		road.update_scroll_speed(0.0)

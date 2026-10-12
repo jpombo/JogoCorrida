@@ -22,9 +22,37 @@ signal fuel_depleted()
 var _atual: float = 0.0
 var _capacidade: float = 0.0
 
+## Capacidade derivada da corrida (SPEC-008, Clarificação de capacidade, R3).
+## -1.0 = sem override (o reset usa GameConfig.fuel_capacity); ≥ 0 substitui
+## a capacidade no próximo reset() — aditivo, sem quebrar as suítes SPEC-007.
+var _capacidade_derivada: float = -1.0
+
 ## Latches rearmedes somente em `reset()` (research R5) — FR-019, FR-023.
 var _baixo_sinalizado: bool = false
 var _esgotado_emitido: bool = false
+
+
+## Define (ou limpa, com negativo) a capacidade da corrida — SPEC-008,
+## FR-018/FR-019. Chamado pelo GameplayManager ANTES do reset() na largada
+## (research R3); o comportamento SPEC-007 sem chamada permanece intacto.
+func definir_capacidade_derivada(cap: float) -> void:
+	if cap < 0.0:
+		_capacidade_derivada = -1.0
+	else:
+		_capacidade_derivada = maxf(cap, 0.0)
+
+
+## Restaura unidades do tanque (coleta de galão — SPEC-008, FR-024/FR-025,
+## research R4). Tanque cheio ⇒ no-op silencioso (sem variação); nunca rearma
+## nem dispara `fuel_depleted` (Clarificação "sem rearme"); a autoridade de
+## quantidade/capacidade/eventos permanece aqui (FR-033).
+func restaurar(valor: float) -> void:
+	if _capacidade <= 0.0:
+		return
+	var incremento: float = maxf(valor, 0.0)
+	if incremento <= 0.0:
+		return
+	_escrever(clampf(_atual + incremento, 0.0, _capacidade))
 
 
 ## Rearma os latches e define a quantidade inicial (sentinela -1 ⇒ capacidade;
@@ -33,7 +61,10 @@ var _esgotado_emitido: bool = false
 func reset() -> void:
 	_baixo_sinalizado = false
 	_esgotado_emitido = false
-	_capacidade = maxf(GameConfig.fuel_capacity, 0.0)
+	if _capacidade_derivada >= 0.0:
+		_capacidade = _capacidade_derivada
+	else:
+		_capacidade = maxf(GameConfig.fuel_capacity, 0.0)
 	var inicial: float = GameConfig.fuel_initial_amount
 	if is_equal_approx(inicial, -1.0):
 		_atual = _capacidade

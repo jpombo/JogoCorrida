@@ -124,6 +124,19 @@ func get_repeat_state(side: int) -> int:
 	return int(last_repeat_by_side.get(side, 0))
 
 
+## Reset de corrida (SPEC-008, FR-035, research R10): elementos visíveis
+## voltam ao pool e os cronômetros de birth/regra de não-repetição voltam ao
+## inicial. A biblioteca do ambiente é preservada — só o estado da corrida
+## some. Idempotente.
+func reset() -> void:
+	_desativar_todos()
+	last_repeat_by_side.clear()
+	_ultimos_por_lado.clear()
+	_cronometro_birth[Side.LEFT] = 0.0
+	_cronometro_birth[Side.RIGHT] = 0.0
+	_habilitado = true
+
+
 ## Quantidade atual de elementos ativos.
 var active_count: int:
 	get:

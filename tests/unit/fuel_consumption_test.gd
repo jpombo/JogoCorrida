@@ -142,17 +142,18 @@ func test_10_clamp_em_zero_e_capacidade() -> void:
 
 
 ## SC-001 / gating de inicialização — READY→PLAYING re-inicializa o tanque;
-## PAUSED→PLAYING preserva o valor. O handler depende apenas do campo
-## `fuel_system` (T006); um Node stub satisfaz `_show_playing`. O manager NÃO
-## entra na árvore (evitando `_ready` com refs de cena nulas).
+## PAUSED→PLAYING preserva o valor. O handler depende apenas dos campos dos
+## sistemas (T006); o manager NÃO entra na árvore (evitando `_ready` com refs
+## de cena nulas). Com o SPEC-008, a largada também DERIVA a capacidade da
+## corrida (FR-018, research R3) — o gating permanece o mesmo.
 func test_gating_reset_somente_ready_para_playing() -> void:
-	# GameplayManager não tem class_name (raiz de cena) — carrega por caminho.
+	# GameplayManager é raiz de cena; carrega por caminho.
 	# Variante não tipada: os campos injetados (T006) são dinâmicos.
 	var manager = load("res://src/game/gameplay_manager.gd").new()
 	# Descarta o FuelSystem já instanciado pelo manager para não deixá-lo órfão.
 	manager.fuel_system.free()
 	manager.fuel_system = FuelSystem.new()
-	manager.player_vehicle = Node.new()
+	manager.player_vehicle = PlayerVehicle.new()
 
 	manager.fuel_system.reset()
 	manager.fuel_system.update(10.0, 100.0)
@@ -163,9 +164,15 @@ func test_gating_reset_somente_ready_para_playing() -> void:
 	manager._on_state_changed(GameState.State.PLAYING, GameState.State.PAUSED)
 	assert_float(manager.fuel_system.get_atual()).is_equal(drenado)
 
-	# READY → PLAYING re-inicializa, exatamente uma vez por partida.
+	# READY → PLAYING re-inicializa, exatamente uma vez por partida, com a
+	# capacidade derivada da corrida (SPEC-008, Clarificação de capacidade).
 	manager._on_state_changed(GameState.State.PLAYING, GameState.State.READY)
-	assert_float(manager.fuel_system.get_atual()).is_equal(GameConfig.fuel_capacity)
+	var esperado: float = (
+		GameConfig.track_total_distance * GameConfig.fuel_consumption_per_distance
+		+ GameConfig.fuel_safety_margin
+	)
+	assert_float(manager.fuel_system.get_capacidade()).is_equal(esperado)
+	assert_float(manager.fuel_system.get_atual()).is_equal(esperado)
 
 	manager.player_vehicle.free()
 	manager.fuel_system.free()

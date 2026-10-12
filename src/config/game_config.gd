@@ -458,3 +458,67 @@ func _build_tuning_groups() -> void:
 ## Texto do rótulo de alerta do HUD (§VI: texto de usuário externalizado,
 ## sem literal no script) — FR-025.
 @export var fuel_low_label: String = "BAIXO"
+
+# ---------------------------------------------------------------------------
+# SPEC-008 — Progressão da Pista, Estados, Combustível e Galões
+# ---------------------------------------------------------------------------
+# Sementes de CALIBRAÇÃO (research R13, FR-039, SC-016): ajustáveis sem tocar
+# na lógica (constitution §IV). Textos de interface 100% externalizados (§VI,
+# FR-041) — nenhum literal de usuário no código das telas ou dos marcadores.
+
+## Distância total da corrida em km — TrackManager e fórmula de dimensionamento.
+@export var track_total_distance: float = 5.0
+
+## Conversão de unidades de física por segundo para km da corrida (research R1):
+## 1 un = 1/KMH_TO_SPEED_UNIT km/h = 1,25 km/h ⇒ 0,00034722 km por un por s.
+@export var track_units_to_km: float = 0.00034722
+
+## Dimensionamento derivado do tanque (Clarificação de capacidade, R3):
+## capacidade da corrida = track_total_distance × fuel_consumption_per_distance
+## + fuel_safety_margin. Calibrado para a corrida de referência terminar com
+## sobra de 15%–35% (FR-039, T055).
+@export var fuel_consumption_per_distance: float = 60.0
+@export var fuel_safety_margin: float = 60.0
+
+## Restauração por galão, em unidades abstratas, global para todos os
+## ambientes (Clarificação "fuel_can_restore_amount único").
+@export var fuel_can_restore_amount: float = 25.0
+
+## Geração dos galões (FR-028…FR-031, research R7).
+@export var fuel_can_spawn_interval_distance: float = 0.35
+@export var fuel_can_min_spacing: float = 120.0
+@export var fuel_can_npc_spacing: float = 24.0
+@export var fuel_can_start_offset: float = 0.15
+@export var fuel_can_finish_offset: float = 0.25
+@export var fuel_can_max_active: int = 3
+@export var fuel_can_min_per_race: int = 4
+@export var fuel_can_max_per_race: int = 12
+
+## Taxa de geração por ambiente (SC-010: planície > deserto > floresta > gelo
+## por construção — a ordem das chaves acompanha a do ENVIRONMENTS).
+var fuel_can_spawn_rate: Dictionary = {
+	"PLAINS": 1.4,
+	"DESERT": 1.0,
+	"FOREST": 0.7,
+	"ICE": 0.5,
+}
+
+## Rótulos de interface (FR-041, §VI): nenhuma lógica contém literal de texto
+## de usuário — UIManager e TrackMarkers leem exclusivamente daqui.
+var ui_strings: Dictionary = {
+	"menu_title": "JogoCorrida",
+	"select_vehicle": "Selecionar veículo",
+	"vehicle_blue": "Azul",
+	"vehicle_red": "Vermelho",
+	"start_race": "Iniciar corrida",
+	"marker_start": "INÍCIO",
+	"marker_finish": "CHEGADA",
+	"distance_format": "Distância: %.1f km / %.1f km",
+	"victory": "Vitória",
+	"game_over": "Fim de jogo",
+	"continue_race": "Continuar",
+	"restart_race": "Reiniciar",
+	"try_again": "Tentar novamente",
+	"back_to_menu": "Voltar ao menu",
+	"paused": "Pausa",
+}

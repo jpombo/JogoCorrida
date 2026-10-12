@@ -755,3 +755,23 @@ static func _ordenar_candidatos(a: TrafficVehicle, b: TrafficVehicle) -> bool:
 	if a.position.y != b.position.y:
 		return a.position.y < b.position.y
 	return a.get_instance_id() < b.get_instance_id()
+
+
+## Reset de corrida (SPEC-008, FR-035, research R10): janelas, cadeias, pares,
+## vereditos e cooldowns voltam ao inicial; o próximo par reconstrói do zero
+## (`_pares_sujos`). Idempotente.
+func reset() -> void:
+	_sobrepostos.clear()
+	_pares.clear()
+	_ids_construcao.clear()
+	_cadeias.clear()
+	_cooldowns.clear()
+	_vereditos.clear()
+	_pares_sujos = true
+	_proximo_id_cadeia = 1
+	_tempo_reavaliacao = 0.0
+	_ultima_velocidade_reavaliada = 0.0
+	_velocidade_estrada = 0.0
+	_bounds_for_y = Callable()
+	_total_reavaliacoes = 0
+	_ativos_validacao.clear()

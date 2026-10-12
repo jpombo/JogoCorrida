@@ -69,3 +69,11 @@ func change_sprite(path: String) -> void:
 ## Obter velocidade atual (para uso externo)
 func get_speed() -> float:
 	return controller.speed
+
+
+## Reset de corrida (SPEC-008, FR-035, research R10): física, flag de
+## combustível, limites e posição inicial. O sprite é reaplicado pelo
+## GameplayManager na largada (seleção de veículo da sessão).
+func reset() -> void:
+	controller.reset()
+	_set_initial_position()

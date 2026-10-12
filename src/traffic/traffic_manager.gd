@@ -715,3 +715,19 @@ func _recolher_inativos() -> void:
 
 	if escrita < active_vehicles.size():
 		active_vehicles.resize(escrita)
+
+
+## Reset de corrida (SPEC-008, FR-035, research R10): todos os ativos voltam
+## ao pool e o estado de geração volta ao inicial. Idempotente; nenhum sinal
+## de spawn/reciclagem novo além dos já emitidos por `_desativar`.
+func reset() -> void:
+	for i in range(active_vehicles.size() - 1, -1, -1):
+		_desativar(active_vehicles[i])
+	active_vehicles.clear()
+	_cronometro_spawn = 0.0
+	_habilitado = true
+	_spawn_pendente = {}
+	_dy_desejado.clear()
+	_y_futuro.clear()
+	_ordem_desc.clear()
+	_ordem_asc.clear()

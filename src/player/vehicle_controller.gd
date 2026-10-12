@@ -17,6 +17,13 @@ var control_factor: float = 1.0
 ## desaceleração natural — a frenagem continua válida. Inerte em 0.0 (FR-034).
 var aceleracao_bloqueada: float = 0.0
 
+## Bloqueio de aceleração com combustível esgotado (SPEC-008, FR-015, R5).
+## Derivado POR QUADRO pelo GameplayManager a partir do valor atual do tanque
+## (Clarificação: sem latch; a coleta desbloqueia no mesmo instante). Distinto
+## e independente do lockout temporizado da SPEC-005. Frenagem e desaceleração
+## natural continuam valendo — o carro não para instantaneamente (FR-015).
+var aceleracao_bloqueada_por_combustivel: bool = false
+
 ## Delta do frame atual
 var current_delta: float = 0.0
 
@@ -49,6 +56,7 @@ func _apply_vertical_physics(delta: float) -> void:
 		Input.is_action_pressed("accelerate")
 		and not Input.is_action_pressed("brake")
 		and aceleracao_bloqueada <= 0.0
+		and not aceleracao_bloqueada_por_combustivel
 	):
 		speed = min(speed + GameConfig.acceleration * delta, GameConfig.max_speed)
 	elif Input.is_action_pressed("brake"):
@@ -115,5 +123,6 @@ func reset() -> void:
 	lateral_speed = 0.0
 	control_factor = 1.0
 	aceleracao_bloqueada = 0.0
+	aceleracao_bloqueada_por_combustivel = false
 	current_left_boundary = GameConfig.road_left_boundary
 	current_right_boundary = GameConfig.road_right_boundary

@@ -162,3 +162,15 @@ func _decaCooldowns(delta: float) -> void:
 			expirados.append(id)
 	for id in expirados:
 		_cooldowns.erase(id)
+
+
+## Reset de corrida (SPEC-008, FR-035, research R10): cooldowns, pares
+## sobrepostos, drift do jogador e intensidade do último impacto voltam ao
+## inicial. Idempotente; `drift` é substituído por estado limpo (novo
+## DriftState em NORMAL).
+func reset() -> void:
+	_cooldowns.clear()
+	_sobrepostos.clear()
+	drift = DriftState.new()
+	ultima_intensidade = 0.0
+	_ultimos_bounds = null
