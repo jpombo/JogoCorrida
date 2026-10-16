@@ -31,6 +31,11 @@ var spawn_pendente: Dictionary = {}
 const Y_SPAWN: float = -40.0
 const MARGEM_LATERAL: float = 16.0
 
+## Configuração efetiva injetada pelo GameplayManager (SPEC-009, FR-008):
+## `frequencia_galoes` (taxa por ambiente × fator) e `distancia_galoes`
+## (intervalo × fator). Nulo = 1,0 nos dois — testes legados intactos (R12).
+var dificuldade: DifficultyManager = null
+
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -123,10 +128,8 @@ func _tentar_gerar(road: Road, npcs: Array, track: TrackManager) -> void:
 		if track.get_restante() < GameConfig.fuel_can_finish_offset:
 			return
 
-	var taxa: float = float(
-		GameConfig.fuel_can_spawn_rate.get(GameConfig.current_environment_id, 1.0)
-	)
-	var intervalo: float = GameConfig.fuel_can_spawn_interval_distance / maxf(taxa, 0.01)
+	var taxa: float = _taxa_efetiva()
+	var intervalo: float = _intervalo_efetiva(taxa)
 	# Piso por corrida antecipa o nascimento (intervalo × 0.5) até o mínimo.
 	var antecipado: bool = gerados_na_corrida < GameConfig.fuel_can_min_per_race
 	var corte: float = intervalo * (0.5 if antecipado else 1.0)
@@ -152,6 +155,30 @@ func _tentar_gerar(road: Road, npcs: Array, track: TrackManager) -> void:
 	spawn_pendente = {}
 	distancia_desde_ultima = 0.0
 	gerados_na_corrida += 1
+
+
+## Taxa de spawn efetiva (SPEC-009, FR-008, data-model §2): taxa por
+## ambiente × `frequencia_galoes` do modo. Sem injeção → 1,0 (R12).
+func _taxa_efetiva() -> float:
+	var base: float = float(
+		GameConfig.fuel_can_spawn_rate.get(GameConfig.current_environment_id, 1.0)
+	)
+	var fator: float = 1.0
+	if dificuldade != null:
+		fator = dificuldade.fator_frequencia_galoes()
+	return base * fator
+
+
+## Intervalo de distância efetiva (SPEC-009, FR-008): intervalo-base ×
+## `distancia_galoes` do modo / taxa (piso 0,01 — divisão sempre finita).
+func _intervalo_efetiva(taxa: float) -> float:
+	var fator: float = 1.0
+	if dificuldade != null:
+		fator = dificuldade.fator_distancia_galoes()
+	return (
+		GameConfig.fuel_can_spawn_interval_distance * fator
+		/ maxf(taxa, 0.01)
+	)
 
 
 ## Validação do candidato (FR-022/FR-030, R7): dentro dos limites vigentes,

@@ -14,8 +14,8 @@
 | `PAUSED` → `PLAYING` | comando `continue_race` / `ui_cancel` | rolagem volta a ser alimentada no ramo PLAYING |
 | `PLAYING` → `VICTORY` | cruzamento **completo** da banda da chegada + `fuel_atual > 0` + corrida não encerrada | avaliado no passo 6 da ordem canônica; 1× por corrida (`change_state` no-op) |
 | `PLAYING` → `GAME_OVER` | `combustível == 0 and speed == 0 and não concluída` (pós-consumo) | 1× por corrida; nunca revertido (ramo PLAYING deixa de rodar; coleta fora de PLAYING não coleta) |
-| qualquer → `READY` | `restart_race` / "Tentar novamente" / "Reiniciar" | reset completo orquestrado antes |
-| qualquer → `MENU` | `go_to_menu` | reset de encerramento; nenhum sistema avança em segundo plano (FR-036) |
+| qualquer → `READY` | `restart_race` / "Reiniciar" (pausa) | reset completo orquestrado antes; "Tentar novamente" foi removido das telas de fim pela SPEC-009 (FR-020/FR-021) — o reinício após derrota/vitória só acontece a partir do menu |
+| qualquer → `MENU` | `go_to_menu` (pausa, vitória e fim de jogo) | reset de encerramento; nenhum sistema avança em segundo plano (FR-036) |
 
 `victory()` e `game_over()` são chamados **apenas** pelo `GameplayManager` (nenhum objeto de gameplay decide estado global — FR-001).
 

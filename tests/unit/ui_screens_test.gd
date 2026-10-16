@@ -53,16 +53,21 @@ func test_h2_pausa() -> void:
 
 
 ## H3 — VICTORY e GAME_OVER: painéis próprios com as opções da config.
+## SPEC-009 / FR-020–021 (T014): vitória = [Continuar próxima fase, Voltar
+## ao menu] e Game Over = [Voltar ao menu] — "Tentar novamente" removido das
+## duas telas (substitui o FR-034 da SPEC-008).
 func test_h3_vitoria_e_gameover() -> void:
 	GameState.change_state(GameState.State.VICTORY)
 	assert_bool(ui._painel_vitoria.visible).is_true()
 	assert_int(ui._opcoes_vitoria.size()).is_equal(2)
-	assert_bool(ui._opcoes_vitoria[0].text == String(GameConfig.ui_strings.get("try_again", ""))).is_true()
+	assert_bool(ui._opcoes_vitoria[0].text == String(GameConfig.ui_strings.get("continue_next_phase", ""))).is_true()
 	assert_bool(ui._opcoes_vitoria[1].text == String(GameConfig.ui_strings.get("back_to_menu", ""))).is_true()
 
 	GameState.change_state(GameState.State.GAME_OVER)
 	assert_bool(ui._painel_gameover.visible).is_true()
 	assert_bool(ui._painel_vitoria.visible).is_false()
+	assert_int(ui._opcoes_gameover.size()).is_equal(1)
+	assert_bool(ui._opcoes_gameover[0].text == String(GameConfig.ui_strings.get("back_to_menu", ""))).is_true()
 	assert_bool(ui._painel_gameover.get_child(1).text == String(GameConfig.ui_strings.get("game_over", ""))).is_true()
 
 

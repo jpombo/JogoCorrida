@@ -44,6 +44,17 @@ var _habilitado: bool = true
 ## SPEC-001–005 enxergam, garantindo a regressão SC-016.
 var validador: NpcCollisionSystem = null
 
+## Referência à configuração efetiva de dificuldade (SPEC-009, R8/R11).
+## Nula = legado SPEC-004/008 (fatores 1,0 — R12); injetada pelo
+## GameplayManager uma vez no `_ready` e mantida por corrida.
+var dificuldade: DifficultyManager = null
+
+## Semente do fator de velocidade da corrida para os próximos nascimentos
+## (SPEC-009, R11): gravado por veículo no `_nascer`/`activate`; o fator
+## total é fixo por corrida e os NPCs resetados a cada largada garantem que
+## todos reflitem o modo. Default 1,0 = SPEC-004 intacto (R12).
+var fator_dificuldade: float = 1.0
+
 ## Candidato adiado para o quadro seguinte (FR-029, Clarificação Q3):
 ## `{"categoria": TrafficData}`. Revalidado a cada quadro em `update()` com
 ## as posições atualizadas até nascer; nunca descartado até o próximo
@@ -183,12 +194,26 @@ func _contar_visiveis() -> int:
 	return n
 
 
-## Máximo de NPCs visíveis para a dificuldade do ambiente corrente.
-## Sem correspondência configurada, cai no próprio `traffic_min_visible`.
+## Máximo de NPCs visíveis para a dificuldade do ambiente corrente,
+## escalado pelo fator de densidade do modo (SPEC-009, FR-006, R5): o teto
+## do ambiente × fator, sempre dentro dos limites absolutos
+## `[traffic_min_visible, traffic_max_vehicles]` — o modo nunca viola o
+## piso nem o teto globais (SC-005 da US3). Fator 1,0 (sem injeção) mantém
+## o teto legado intacto (R12).
 func _maximo_visivel_atual() -> int:
 	var ambiente: Dictionary = GameConfig.ENVIRONMENTS.get(GameConfig.current_environment_id, {})
-	var dificuldade: int = int(ambiente.get("difficulty", 1))
-	return int(GameConfig.traffic_max_visible_by_difficulty.get(dificuldade, GameConfig.traffic_min_visible))
+	var nivel_ambiente: int = int(ambiente.get("difficulty", 1))
+	var teto: int = int(
+		GameConfig.traffic_max_visible_by_difficulty.get(
+			nivel_ambiente, GameConfig.traffic_min_visible
+		)
+	)
+	var escalado: float = float(teto) * fator_dificuldade
+	return clampi(
+		int(round(escalado)),
+		GameConfig.traffic_min_visible,
+		GameConfig.traffic_max_vehicles
+	)
 
 
 ## Habilita ou desabilita o spawn (FR-024, T041).
@@ -316,6 +341,9 @@ func _nascer(
 	veiculo: TrafficVehicle, categoria: TrafficData, x: float, y: float, bounds: Dictionary
 ) -> void:
 	veiculo.activate(categoria, x, y)
+	# SPEC-009 / R11: o fator da corrida é gravado no nascimento — `get_speed`
+	# passa a ser base × fator sem mutar a categoria (FR-003).
+	veiculo.fator_dificuldade = fator_dificuldade
 	veiculo.position.x = x
 	veiculo.previous_right_boundary = bounds.get("right", 0.0)
 	# O nó já tem este manager como pai: veio do pool, ou foi criado e anexado

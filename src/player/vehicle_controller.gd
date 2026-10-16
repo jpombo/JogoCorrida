@@ -24,6 +24,14 @@ var aceleracao_bloqueada: float = 0.0
 ## natural continuam valendo — o carro não para instantaneamente (FR-015).
 var aceleracao_bloqueada_por_combustivel: bool = false
 
+## Fator de dificuldade da corrida (SPEC-009, R1/R2): escala teto,
+## aceleração, frenagem e desaceleração natural JUNTOS, preservando as
+## razões e a curva normalizada (SC-003). Lateral nunca escalado (R2).
+## Default 1,0 = comportamento SPEC-001 intacto (R12); injetado por corrida
+## pelo GameplayManager. `reset()` NÃO o toca — o valor da sessão permanece
+## e é reafirmado na largada (contracts/difficulty_manager_api.md §4).
+var fator_dificuldade: float = 1.0
+
 ## Delta do frame atual
 var current_delta: float = 0.0
 
@@ -50,19 +58,22 @@ func _process(delta: float) -> void:
 	_apply_lateral_physics(delta)
 	speed_changed.emit(speed)
 
-## Calcular física vertical (aceleração, frenagem, inércia)
+## Calcular física vertical (aceleração, frenagem, inércia).
+## SPEC-009 / R1-R2: teto, aceleração, frenagem e desaceleração natural
+## escalados pelo MESMO fator — tempo até a máxima invariante (SC-003).
 func _apply_vertical_physics(delta: float) -> void:
+	var fator: float = fator_dificuldade
 	if (
 		Input.is_action_pressed("accelerate")
 		and not Input.is_action_pressed("brake")
 		and aceleracao_bloqueada <= 0.0
 		and not aceleracao_bloqueada_por_combustivel
 	):
-		speed = min(speed + GameConfig.acceleration * delta, GameConfig.max_speed)
+		speed = min(speed + GameConfig.acceleration * fator * delta, GameConfig.max_speed * fator)
 	elif Input.is_action_pressed("brake"):
-		speed = max(speed - GameConfig.brake_force * delta, 0.0)
+		speed = max(speed - GameConfig.brake_force * fator * delta, 0.0)
 	else:
-		speed = max(speed - GameConfig.natural_deceleration * delta, 0.0)
+		speed = max(speed - GameConfig.natural_deceleration * fator * delta, 0.0)
 
 ## Calcular física lateral (independente do vertical).
 ## A resposta é multiplicada por `control_factor` (SPEC-005): durante o drift
@@ -80,9 +91,12 @@ func _apply_lateral_physics(delta: float) -> void:
 		else:
 			lateral_speed = min(lateral_speed + GameConfig.lateral_deceleration * delta, 0.0)
 
-## Retornar posição Y normalizada baseada na velocidade
+## Retornar posição Y normalizada baseada na velocidade.
+## SPEC-009: a normalização usa o teto EFETIVO (max_speed × fator) — a mesma
+## razão de velocidade ocupa a mesma altura em qualquer modo (SC-003).
 func get_vertical_position() -> float:
-	var speed_ratio: float = speed / GameConfig.max_speed
+	var teto: float = GameConfig.max_speed * maxf(fator_dificuldade, 0.001)
+	var speed_ratio: float = clampf(speed / teto, 0.0, 1.0)
 	return lerp(GameConfig.vertical_position_max, GameConfig.vertical_position_min, speed_ratio)
 
 ## Retornar direção lateral (-1.0, 0.0, ou 1.0)

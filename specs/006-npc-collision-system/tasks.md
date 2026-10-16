@@ -156,7 +156,7 @@ Pré-requisitos que bloqueiam todas as histórias: payload do evento, estrutura 
 
 - [X] T035 [US9] Verify wiring order in `src/game/gameplay_manager.gd`: `npc_collision_system.update` antes de `collision_system.update` para que o contato do NPC deslocado seja visto no mesmo quadro (research R9, FR-038)
 - [X] T036 [US9] Resolve the active ceiling as a read-only projection in `src/collision/npc_collision_system.gd`: `npc_max_active` **derivado** do teto por dificuldade do SPEC-004 (`GameConfig.traffic_max_visible_by_difficulty`/`traffic_max_vehicles`) — sem valor armazenado novo; avaliação correta com até 5 ativos, configurável pela fonte existente (FR-042)
-- [ ] T037 [US9] Manual acceptance em `quickstart.md` Validação 2.9: Gelo com 5 NPCs + transição de vias + colisão NPC×NPC → contato com o jogador (SC-011, SC-018, SC-019)
+- [X] T037 [US9] Manual acceptance em `quickstart.md` Validação 2.9: Gelo com 5 NPCs + transição de vias + colisão NPC×NPC → contato com o jogador (SC-011, SC-018, SC-019) — executado em 2026-10-16 sem problemas, ver Phase 13
 
 **Checkpoint**: Todo o P1 entregue e o jogo preservado — suíte completa verde.
 
@@ -226,9 +226,9 @@ Pré-requisitos que bloqueiam todas as histórias: payload do evento, estrutura 
 
 **Purpose**: Validação ponta a ponta, configurabilidade e qualidade
 
-- [ ] T050 [P] Configurability check per `quickstart.md` Validação 3 (SC-017): alterar `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_max_chain_depth`, `npc_border_margin`, `npc_reevaluation_interval` etc. e confirmar efeito observável sem tocar código
-- [ ] T051 [P] Endurance check per `quickstart.md` Validação 2.9: **3 rodadas de 10 minutos** (pista de 2 vias, de 4 vias e com a transição completa 2→4→2) com jogador + 5 NPCs — 0 veículos fora da área trafegável (SC-006/SC-018) e 60 FPS como meta sem queda recorrente abaixo de 30 (SC-019)
-- [ ] T052 Run `quickstart.md` end-to-end (Validações 1–3) com a suíte headless verde (exit 101) e o aceite manual US1–US9 concluído
+- [X] T050 [P] Configurability check per `quickstart.md` Validação 3 (SC-017): alterar `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_max_chain_depth`, `npc_border_margin`, `npc_reevaluation_interval` etc. e confirmar efeito observável sem tocar código — executado em 2026-10-16 sem problemas, ver Phase 13
+- [X] T051 [P] Endurance check per `quickstart.md` Validação 2.9: **3 rodadas de 10 minutos** (pista de 2 vias, de 4 vias e com a transição completa 2→4→2) com jogador + 5 NPCs — 0 veículos fora da área trafegável (SC-006/SC-018) e 60 FPS como meta sem queda recorrente abaixo de 30 (SC-019) — executado em 2026-10-16 sem problemas, ver Phase 13
+- [X] T052 Run `quickstart.md` end-to-end (Validações 1–3) com a suíte headless verde (exit 101) e o aceite manual US1–US9 concluído — concluído em 2026-10-16 (suíte 63 suítes/388 casos, exit 101), ver Phase 13
 - [X] T053 [P] Code quality pass em `src/collision/npc_*.gd`, `src/traffic/traffic_vehicle.gd`, `src/traffic/traffic_manager.gd`: comentários em pt-BR explicando o PORQUÊ, sem números mágicos (todos via `GameConfig`), responsabilidade única preservada (§Qualidade de Código, FR-044)
 - [X] T054 Update `AGENTS.md` §Estado atual com a conclusão da SPEC-006 e o novo total de suítes/casos
 
@@ -328,3 +328,15 @@ Task: "Apply collision consequences"
 - Commit após cada tarefa ou grupo lógico
 - Parar em qualquer checkpoint para validar a história isoladamente
 - Evitar: tarefas vagas, conflitos no mesmo arquivo, dependências que quebram a independência das histórias
+
+---
+
+## Phase 13: Aceite manual (2026-10-16)
+
+**Purpose**: Execução das validações manuais do `quickstart.md` (2.9 e 3) e do end-to-end (Validações 1–3) pelo usuário, no build que já inclui as SPEC-007/008/009; registro exigido por T037/T050–T052.
+
+- [X] T037 Validação 2.9 — **sem problemas identificados**: Gelo com 5 NPCs junto ao jogador, transição de vias 2↔4 e colisão NPC×NPC com contato/resultados junto ao jogador, sem veículo fora da área trafegável (SC-011, SC-018, SC-019).
+- [X] T050 Validação 3 (configurabilidade) — **sem problemas identificados**: alterações em `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_max_chain_depth`, `npc_border_margin`, `npc_reevaluation_interval` etc. produzem efeito observável sem tocar código (SC-017).
+- [X] T051 Endurance — **sem problemas identificados**: 3 rodadas de 10 minutos (2 vias, 4 vias e transição completa 2→4→2) com jogador + 5 NPCs, 0 veículos fora da área trafegável e frame rate estável (SC-006/SC-018/SC-019).
+- [X] T052 Quickstart end-to-end (Validações 1–3) — concluído com a suíte headless verde na mesma data (**63 suítes, 388 casos, exit 101**) e o aceite manual US1–US9 fechado.
+- **Pendência que permanece (não é aceite manual)**: implementação do **FR-046** do clarify de 2026-10-09 (cedência do espaçamento mínimo durante o movimento entre velocidades distintas) e a consistência spec↔plan↔tasks dele decorrente — registrada em `AGENTS.md` §Estado atual.

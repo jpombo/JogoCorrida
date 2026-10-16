@@ -31,6 +31,21 @@ var _capacidade_derivada: float = -1.0
 var _baixo_sinalizado: bool = false
 var _esgotado_emitido: bool = false
 
+## Fator de velocidade da corrida (SPEC-009, R3): `_taxa_consumo` normaliza
+## pelo teto EFETIVO (max_speed × fator) e multiplica a taxa pelo mesmo
+## fator — consumo por KM constante em todos os modos (SC-008), mantendo a
+## capacidade derivada da SPEC-008 válida sem novo dimensionamento.
+## Default 1,0 = modelo SPEC-007 intacto (R12); injetado por corrida.
+## `reset()` NÃO o toca — a virada READY → PLAYING re-executa o reset e
+## apagaria a injeção da largada.
+var fator_velocidade: float = 1.0
+
+## Fator do modo aplicado à penalidade de colisão (SPEC-009, R7/SC-007):
+## `on_player_collision` aplica collision_fuel_penalty[ambiente] × fator.
+## Default 1,0 = SPEC-007 intacto (R12); mesmo ciclo de vida de
+## `fator_velocidade` (reset preserva).
+var fator_penalidade_colisao: float = 1.0
+
 
 ## Define (ou limpa, com negativo) a capacidade da corrida — SPEC-008,
 ## FR-018/FR-019. Chamado pelo GameplayManager ANTES do reset() na largada
@@ -86,14 +101,19 @@ func update(delta: float, velocidade: float) -> void:
 	_avaliar_limiar()
 
 
-## Desconta `collision_fuel_penalty[ambiente]` lido NO MOMENTO do evento, com
-## clamp a zero — FR-011/FR-016/FR-017. Conectado ao sinal `collision_occurred`
-## da SPEC-005: 1 evento = 1 desconto, sem deduplicação própria (FR-013, R2).
+## Desconta `collision_fuel_penalty[ambiente] × fator_penalidade_colisao`
+## lido NO MOMENTO do evento, com clamp a zero — FR-011/FR-016/FR-017.
+## SPEC-009 / R7 (SC-007): o fator do modo é aplicado AQUI, no único ponto
+## de leitura da penalidade — 1 evento = 1 desconto, sem deduplicação
+## própria (FR-013, R2). Penalidade base 0 × fator = 0 (nunca negativa).
 func on_player_collision(_data = null) -> void:
 	if _atual <= 0.0:
 		return
 	var ambiente: String = GameConfig.current_environment_id
-	var penalidade: float = float(GameConfig.collision_fuel_penalty.get(ambiente, 0.0))
+	var penalidade: float = (
+		float(GameConfig.collision_fuel_penalty.get(ambiente, 0.0))
+		* fator_penalidade_colisao
+	)
 	if penalidade <= 0.0:
 		return
 	_escrever(clampf(_atual - penalidade, 0.0, _capacidade))
@@ -118,13 +138,21 @@ func get_capacidade() -> float:
 
 ## Modelo linear de consumo (research R1): repouso usa o consumo em repouso;
 ## em movimento, `min + normalização × fator` com teto no máximo — FR-006…FR-009.
+## SPEC-009 / R3: a normalização usa o teto EFETIVO (max_speed × fator) e a
+## taxa final é multiplicada pelo fator — consumo por km constante (SC-008),
+## com o mesmo clamp [min, max] do modelo já sobre a taxa escalada.
 func _taxa_consumo(velocidade: float) -> float:
 	if velocidade <= 0.0:
 		return GameConfig.fuel_consumption_idle
-	var normalizada: float = clampf(velocidade / GameConfig.max_speed, 0.0, 1.0)
-	var taxa: float = GameConfig.fuel_consumption_min \
-		+ normalizada * GameConfig.fuel_consumption_speed_factor
-	return clampf(taxa, GameConfig.fuel_consumption_min, GameConfig.fuel_consumption_max)
+	var fator: float = maxf(fator_velocidade, 0.001)
+	var normalizada: float = clampf(velocidade / (GameConfig.max_speed * fator), 0.0, 1.0)
+	var taxa: float = (GameConfig.fuel_consumption_min \
+		+ normalizada * GameConfig.fuel_consumption_speed_factor) * fator
+	return clampf(
+		taxa,
+		GameConfig.fuel_consumption_min * fator,
+		GameConfig.fuel_consumption_max * fator
+	)
 
 
 ## Toda escrita passa por aqui: emite `fuel_changed` apenas em variação real e

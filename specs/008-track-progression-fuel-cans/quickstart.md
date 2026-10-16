@@ -40,17 +40,17 @@ Executar em `"$GODOT_BIN" --path .` (janela 640×480):
 
 | # | Passo | Esperado |
 |---|---|---|
-| 1 | Abrir o jogo | Abre em `MENU` com seleção azul (padrão) e vermelho; a opção ativa ("Selecionar veículo") aparece com retângulo semitransparente de destaque, alternável com `ui_up`/`ui_down`; nenhum sistema avança |
+| 1 | Abrir o jogo | Abre em `MENU` com **3 linhas** — "Selecionar veículo" + nome (azul/vermelho), "Modo: …" e "Iniciar corrida" (3ª linha e linha de modo acrescentadas pela SPEC-009); a opção ativa aparece com retângulo semitransparente de destaque, alternável com `ui_up`/`ui_down`; nenhum sistema avança |
 | 2 | Destacar "Iniciar corrida" (`ui_down`) e iniciar | Corrida com o veículo **azul** (ou o escolhido); a banda `INÍCIO` (área quadriculada) e seu rótulo aparecem **imediatamente** com a pista, e some da tela ao avançar; indicador `Distância: 0,0 km / 5,0 km` |
 | 3 | Acelerar / parar / só trocar de faixa | Distância cresce só com o avanço; parado e em mudança de faixa: **0** crescimento |
 | 4 | Pausar (Escape) | `PAUSED` com "Continuar", "Reiniciar", "Voltar ao menu"; rolagem, consumo, trânsito, galões e indicador **congelados**; retomar sem salto |
-| 5 | Dirigir até o fim sem coletar nada | `CHEGADA` se aproxima pela rolagem; ao cruzar **com combustível**: `VICTORY` uma única vez, com "Tentar novamente" e "Voltar ao menu" |
-| 6 | Zerar o combustível (rodar sem coletar em ambiente difícil) | Aviso `BAIXO` (SPEC-007); com zero: sem aceleração, desaceleração **gradual**, distância ainda crescendo; ao parar sem concluir: `GAME_OVER` uma única vez |
+| 5 | Dirigir até o fim sem coletar nada | `CHEGADA` se aproxima pela rolagem; ao cruzar **com combustível**: `VICTORY` uma única vez, com "Continuar próxima fase" e "Voltar ao menu" (opções da SPEC-009 FR-020 — substituem o "Tentar novamente" do FR-034 original) |
+| 6 | Zerar o combustível (rodar sem coletar em ambiente difícil) | Aviso `BAIXO` (SPEC-007); com zero: sem aceleração, desaceleração **gradual**, distância ainda crescendo; ao parar sem concluir: `GAME_OVER` uma única vez, com **apenas "Voltar ao menu"** (SPEC-009 FR-021) |
 | 7 | Coletar um galão durante a desaceleração | Combustível sobe na hora (cap no máximo), aceleração volta a funcionar, corrida continua |
 | 8 | Passar por um galão sem coletar | Galão que chega à base some e reaparece mais adiante (pool), em nova posição |
 | 9 | Conferir coleta × colisão | Encostar em galão: **zero** efeitos de colisão; encostar em NPC: efeitos SPEC-005 intactos |
 | 10 | Conferir posicionamento | Nenhum galão nasce sobre NPC; coletar nunca exige colidir com NPC |
-| 11 | Reiniciar (pausa ou fim) e voltar ao menu | Nova corrida limpa (distância 0, tanque derivado cheio, sem galões/marcadores resíduais); no menu, nada roda em segundo plano |
+| 11 | Reiniciar (pela pausa) ou voltar ao menu (pausa/fim) | Nova corrida limpa (distância 0, tanque derivado cheio, sem galões/marcadores resíduais); no menu, nada roda em segundo plano — nas telas de fim só há "Voltar ao menu" (SPEC-009 FR-020/FR-021), o reinício por derrota é feito a partir do menu |
 | 12 | Trocar de veículo e conferir gameplay | Mesma velocidade/aceleração/hitboxes (SC-001/SC-014) |
 
 ## 4. Calibração (tarefa explícita — FR-039)

@@ -521,4 +521,57 @@ var ui_strings: Dictionary = {
 	"try_again": "Tentar novamente",
 	"back_to_menu": "Voltar ao menu",
 	"paused": "Pausa",
+	"mode_label": "Modo",
+	"mode_relaxing": "Relaxante",
+	"mode_normal": "Normal",
+	"mode_challenge": "Desafio",
+	"continue_next_phase": "Continuar próxima fase",
 }
+
+# ---------------------------------------------------------------------------
+# SPEC-009 — Dificuldade e Progressão
+# ---------------------------------------------------------------------------
+# Sementes de CALIBRAÇÃO (research R13, FR-001…FR-002, SC-005/006/007):
+# ajustáveis sem tocar na lógica (constitution §IV). Cada modo é um
+# Dictionary com os 5 multiplicadores da spec; o DifficultyManager lê
+# estes valores e injeta os fatores nos sistemas (contracts/
+# difficulty_manager_api.md §2). Modo padrão "normal" (FR-001).
+
+## Fatores por modo de dificuldade. Campo ausente em uma entrada → o
+## DifficultyManager usa 1,0 naquele campo (fallback seguro, R8/R12).
+## Adendo da spec de 2026-10-14 (spec.md Clarifications): velocidade
+## Relaxante 1,0× / Normal 3,0× / Desafio 4,0× — os demais fatores são os
+## valores iniciais de balanceamento (research R13).
+var difficulty_modes: Dictionary = {
+	"relaxing": {
+		"velocidade": 1.0,
+		"densidade": 0.70,
+		"frequencia_galoes": 1.50,
+		"penalidade_colisao": 0.50,
+		"distancia_galoes": 0.80,
+	},
+	"normal": {
+		"velocidade": 3.0,
+		"densidade": 1.00,
+		"frequencia_galoes": 1.00,
+		"penalidade_colisao": 1.00,
+		"distancia_galoes": 1.00,
+	},
+	"challenge": {
+		"velocidade": 4.0,
+		"densidade": 1.20,
+		"frequencia_galoes": 0.65,
+		"penalidade_colisao": 1.50,
+		"distancia_galoes": 1.20,
+	},
+}
+
+## Modo selecionado no arranque — inválido/ausente cai em "normal" (FR-001).
+@export var difficulty_default_mode: String = "normal"
+
+## Bônus de velocidade por ciclo de 4 vitórias (FR-022, SC-016): 0,2%.
+@export var difficulty_cycle_bonus_increment: float = 0.002
+
+## Sequência de ambientes da progressão infinita (FR-019, contracts/
+## environment_cycle.md §1): cicla com % size na virada de fase.
+@export var environment_sequence: Array = ["PLAINS", "DESERT", "FOREST", "ICE"]

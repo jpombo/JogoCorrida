@@ -18,6 +18,12 @@ enum Direction { FORWARD = 1, OPPOSITE = -1 }
 ## Categoria à qual pertence (FR-002).
 var category: TrafficData = null
 
+## Fator de dificuldade da corrida (SPEC-009, R1/R11): `get_speed()` retorna
+## a velocidade da categoria × fator, sem mutar `TrafficData.max_speed`
+## (FR-003 — bases intactas). Semeado pelo TrafficManager no nascimento;
+## default 1,0 = comportamento SPEC-004 intacto (R12).
+var fator_dificuldade: float = 1.0
+
 ## Posição horizontal na estrada, em pixels.
 var lane_position: float = 0.0
 
@@ -165,10 +171,12 @@ func get_occupied_area() -> Rect2:
 	return Rect2(position - dimensoes * 0.5, dimensoes)
 
 
-## Velocidade do veículo: a da categoria, constante enquanto ATIVE (FR-011, R10).
-## O movimento aparente vem da diferença para o jogador, não desta velocidade.
+## Velocidade do veículo: a da categoria × fator de dificuldade da corrida,
+## constante enquanto ATIVE (FR-011, R10; SPEC-009 R1). O movimento aparente
+## vem da diferença para o jogador, não desta velocidade. A base da
+## categoria NUNCA é mutada (FR-003).
 func get_speed() -> float:
-	return category.max_speed if category != null else 0.0
+	return category.max_speed * fator_dificuldade if category != null else 0.0
 
 
 ## Sentido de percurso (FR-002). Multiplica deslocamentos no eixo do percurso:

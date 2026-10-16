@@ -229,9 +229,9 @@ description: "Task list template for feature implementation"
 **Purpose**: Validação de ponta a ponta, regressão e calibração
 
 - [X] T052 Run suíte completa (`GODOT_BIN=... bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit`) e corrigir até exit 101 — 46 suítes atuais + 9 novas, 0 regressão SPECs 001–007 (SC-013)
-- [ ] T053 Validate quickstart.md passos manuais 1–12 (aceitação A–I em gameplay), incluindo: freeze real da pausa, precedência do esgotamento, coleta sem colisão, reciclagem na base e posição livre de NPCs
+- [X] T053 Validate quickstart.md passos manuais 1–12 (aceitação A–I em gameplay), incluindo: freeze real da pausa, precedência do esgotamento, coleta sem colisão, reciclagem na base e posição livre de NPCs — executado em 2026-10-16 sem problemas, ver Phase 16
 - [X] T054 [P] Review de conformidade: comentários e docs em pt-BR (§VI), nenhum literal de usuário na lógica (FR-041), hitboxes/dimensões dos veículos inalteradas (SC-014), asset `gasolina.png` 32×51 sem redesenho (SC-014)
-- [ ] T055 Calibra sementes CALIBRAÇÃO em src/config/game_config.gd conforme quickstart §4: corrida de referência com sobra de 15%–35%, frequência percebida planície > deserto > floresta > gelo, piso ≥ 4 e teto ≤ 12 galões por corrida — revalidar suíte + passos manuais 3–8 (depends: T052, T053)
+- [X] T055 Calibra sementes CALIBRAÇÃO em src/config/game_config.gd conforme quickstart §4: corrida de referência com sobra de 15%–35%, frequência percebida planície > deserto > floresta > gelo, piso ≥ 4 e teto ≤ 12 galões por corrida — revalidar suíte + passos manuais 3–8 (depends: T052, T053) — concluído em 2026-10-16 sem ajuste de valores, ver Phase 16
 
 ---
 
@@ -363,3 +363,11 @@ Com múltiplos agentes:
 ## Phase 15: Convergence
 
 - [X] T061 Atualizar a documentação dos pontos de chamada do reset após T059: docstring de `_reset_corrida` em src/game/gameplay_manager.gd (hoje lista só a virada `READY → PLAYING` e o reinício imediato T022) e `contracts/game_state_transitions.md` §3, incluindo a nova chamada na preparação do fluxo menu → READY (`_on_start_race`) per contracts/game_state_transitions.md §3 (partial)
+
+## Phase 16: Aceite manual (2026-10-16)
+
+**Purpose**: Execução dos passos manuais 1–12 do quickstart §3 e da calibração §4 pelo usuário, no build que já inclui a SPEC-009; registro exigido por T053/T055.
+
+- [X] T053 Quickstart §3 passos 1–12 — **sem problemas identificados**: menu com destaque (agora 3 linhas, com a linha "Modo" da SPEC-009), banda `INÍCIO` imediata no READY, distância só cresce avançando, pausa comgelando rolagem/consumo/trânsito/galões/indicador (e painel visível — guarda de quadro do ESC da SPEC-009), vitória com "Continuar próxima fase" + "Voltar ao menu" e Game Over só com "Voltar ao menu" (fluxos atualizados no quickstart passos 1/5/6/11 e nos contratos `ui_commands.md` §1 e `game_state_transitions.md` §1 — FR-020/FR-021 da SPEC-009 substituem o "Tentar novamente" do FR-034), precedência do esgotamento, coleta sem efeitos de colisão, reciclagem na base, nenhum galão sobre NPC, corrida limpa ao reiniciar/voltar ao menu, nada rodando em segundo plano no menu e gameplay idêntico entre veículos.
+- [X] T055 Calibração §4 — **nenhum ajuste de valor necessário**: corrida de referência com sobra dentro de 15%–35%, frequência percebida planície > deserto > floresta > gelo e contagem de galões entre o piso 4 e o teto 12 confirmadas com as sementes atuais (`track_*`, `fuel_consumption_per_distance`, `fuel_safety_margin`, `fuel_can_*` em `src/config/game_config.gd`).
+- **Suíte completa na mesma data**: 63 suítes, 388 casos, **exit 101** (verde).

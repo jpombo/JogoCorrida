@@ -3,7 +3,8 @@ extends Node2D
 
 ## Gerenciador de cena de gameplay — integra GameState com a cena e orquestra
 ## os sistemas da corrida (SPEC-008: progressão, estados, combustível,
-## galões). Componentes próprios por sistema (constitution §III); a ordem
+## galões; SPEC-009: dificuldade por modo e progressão infinita de
+## ambientes). Componentes próprios por sistema (constitution §III); a ordem
 ## canônica de atualização por quadro está no research R9 e no contrato
 ## `game_state_transitions.md` (FR-017).
 
@@ -51,12 +52,26 @@ var fuel_system: FuelSystem = FuelSystem.new()
 ## integrada pela velocidade de avanço, independente da rolagem (FR-007).
 var track_manager: TrackManager = TrackManager.new()
 
+## Configuração efetiva de dificuldade (SPEC-009, R8): dono do modo vigente
+## e dos fatores por modo; injetado por referência nos sistemas no `_ready`
+## e reafirmado a cada largada (o fator de ciclo muda entre corridas, FR-006).
+var dificuldade: DifficultyManager = DifficultyManager.new()
+
+## Progresso da sessão (SPEC-009, FR-019/FR-022/FR-023): posição na
+## sequência de ambientes, vitórias do ciclo e ciclos concluídos. Dono do
+## `environment_sequence` em runtime; não é persistente (fechar o jogo zera).
+var progresso: RaceProgression = RaceProgression.new()
+
 ## Seleção de veículo da sessão (SPEC-008, AS2/FR-002): padrão "azul";
 ## só troca o sprite — nunca atributos (SC-001/SC-014).
 var _veiculo_selecionado: String = "azul"
 
 ## Contagem de 1 s do READY → PLAYING (guarda contra timers duplicados).
 var _contagem_ready: bool = false
+
+## Quadro em que o estado entrou em PLAYING (guarda do ESC — ver
+## `_processar_playing`).
+var _frame_play: int = -1
 
 ## Emitido 1× quando a corrida termina em vitória ou em derrota (SC-005).
 signal race_won
@@ -123,13 +138,46 @@ func _ready() -> void:
 		ui_root.setup(track_manager, game_state)
 		ui_root.start_race.connect(_on_start_race)
 		ui_root.select_next_vehicle.connect(_on_select_next_vehicle)
+		ui_root.select_next_mode.connect(_on_select_next_mode)
 		ui_root.continue_race.connect(_on_continue_race)
+		ui_root.continue_next_phase.connect(_on_continue_next_phase)
 		ui_root.restart_race.connect(_on_restart_race)
 		ui_root.go_to_menu.connect(_on_go_to_menu)
+
+	# SPEC-009: modo padrão da sessão e fatores injetados nos sistemas
+	# (contrato difficulty_manager_api.md §2). Os sistemas sem injeção
+	# permanecem em 1,0 — os testes legados não passam por aqui (R12).
+	dificuldade.definir_modo(String(GameConfig.difficulty_default_mode))
+	_aplicar_fatores_por_corrida()
+	if ui_root:
+		ui_root.atualizar_modo(_rotulo_modo())
 
 	# Iniciar no MENU
 	game_state.reset()
 	_show_menu()
+
+
+## Injeta a configuração efetiva nos sistemas (SPEC-009, contracts/
+## difficulty_manager_api.md §2): referência do DifficultyManager no
+## trânsito e nos galões, fator de velocidade no controller do jogador e no
+## consumo, e fator de penalidade no FuelSystem. Uma vez no `_ready` e
+## refresh por corrida (`_on_start_race`) — nada lê modo em PLAYING (FR-006).
+## Nulos são ignorados: testes que montam o manager sintético mantêm os
+## defaults 1,0 (R12 — regressão intacta).
+func _aplicar_fatores_por_corrida() -> void:
+	if dificuldade == null:
+		return
+	var fator_velocidade: float = dificuldade.fator_velocidade_total()
+	if player_vehicle and player_vehicle.controller:
+		player_vehicle.controller.fator_dificuldade = fator_velocidade
+	if fuel_system:
+		fuel_system.fator_velocidade = fator_velocidade
+		fuel_system.fator_penalidade_colisao = dificuldade.fator_penalidade_colisao()
+	if traffic_layer:
+		traffic_layer.dificuldade = dificuldade
+		traffic_layer.fator_dificuldade = fator_velocidade
+	if items_layer:
+		items_layer.dificuldade = dificuldade
 
 
 ## Propaga o ambiente vigente para fundo e decoração (FR-031, T061).
@@ -181,7 +229,13 @@ func _aguardar_inicio() -> void:
 ## limites do jogador → colisão jogador×NPC; 3. galões; 4. combustível;
 ## 5. progressão e marcadores; 6. transições; 7. flag de aceleração (R5).
 func _processar_playing(delta: float) -> void:
-	if Input.is_action_just_pressed("ui_cancel"):
+	# Guarda de quadro (par da guarda da UI em `_process_pausa`): o ESC só
+	# pausa a partir do quadro seguinte à virada para PLAYING. Assim um
+	# `ui_cancel` que só existia para retomar (retomada no mesmo quadro, se a
+	# UI processasse antes do manager) não vira pausa imediata — o toggle
+	# fica estável em QUALQUER ordem de processamento entre os dois nós.
+	if Input.is_action_just_pressed("ui_cancel") \
+			and Engine.get_process_frames() > _frame_play:
 		game_state.pause_game()
 		return
 
@@ -265,6 +319,10 @@ func _avaliar_transicoes() -> void:
 		# após qualquer encerramento (idempotente; largada/menu já limpam).
 		if items_layer:
 			items_layer.reset()
+		# SPEC-009 / FR-019: o avanço de fase é registrado ANTES da vitória
+		# — `_on_continue_next_phase` consome o estado já avançado
+		# (environment_cycle.md §2).
+		progresso.registra_vitoria()
 		race_won.emit()
 		game_state.victory()
 		return
@@ -272,6 +330,9 @@ func _avaliar_transicoes() -> void:
 			and player_vehicle.get_speed() <= 0.0:
 		if items_layer:
 			items_layer.reset()
+		# SPEC-009 / FR-023: derrota recomeça por PLAINS com ciclos
+		# preservados (mesmo ponto de transição, environment_cycle.md §2).
+		progresso.zerar_ciclo_por_derrota()
 		race_lost.emit()
 		game_state.game_over()
 
@@ -320,19 +381,59 @@ func _reset_corrida() -> void:
 ## Comandos da UI (R12): a UI emite, o manager decide, o GameState transiciona
 ## (FR-001/FR-005).
 func _on_start_race() -> void:
-	_aplicar_sprite_selecionado()
-	# T059 / FR-009 + FR-018: preparar a apresentação já no menu → READY —
-	# indicador zerado (0,0 km / total) e tanque na carga inicial ANTES do
-	# timer de 1 s. Sem isto o READY exibia o estado residual da corrida
-	# anterior (ou vazio na 1ª corrida) até a virada READY → PLAYING. Mesmo
-	# reset idempotente do reinício (R10/SC-012): a virada re-executa.
-	_reset_corrida()
+	_preparar_proxima_corrida()
 	game_state.start_game()
+
+
+## "Continuar próxima fase" (SPEC-009, FR-020; environment_cycle.md §3):
+## o avanço de ambiente/ciclo já foi registrado na vitória
+## (`_avaliar_transicoes` → `progresso.registra_vitoria`); aqui só se
+## consome — mesmo preparo do menu → READY (garantia 2: mesma corrida do
+## zero, modo selecionado mantido). Sem "Tentar novamente" (R10).
+func _on_continue_next_phase() -> void:
+	_preparar_proxima_corrida()
+	game_state.start_game()
+
+
+## Preparo comum do menu → READY e da vitória → próxima fase (SPEC-009,
+## environment_cycle.md §2–§3):
+## 1. ambiente da próxima corrida (`GameConfig.current_environment_id` —
+##    a propagação existente no `_process` troca fundo/decoração, R9);
+## 2. fator de ciclo novo na configuração efetiva (só entre corridas,
+##    FR-006);
+## 3. sprite do jogador + reset SPEC-008 + injeção de fatores por corrida
+##    (T059: apresentação já no READY — indicador/tanque na carga inicial).
+func _preparar_proxima_corrida() -> void:
+	GameConfig.current_environment_id = progresso.ambiente_atual()
+	dificuldade.aplicar_fator_ciclo(progresso.fator_ciclo())
+	_aplicar_sprite_selecionado()
+	# Reset idempotente do reinício (R10/SC-012): a virada READY → PLAYING
+	# re-executa; `reset()` não toca nos fatores, a injeção reafirma.
+	_reset_corrida()
+	_aplicar_fatores_por_corrida()
 
 
 func _on_select_next_vehicle() -> void:
 	_veiculo_selecionado = "vermelho" if _veiculo_selecionado == "azul" else "azul"
 	_aplicar_sprite_selecionado()
+
+
+## Cicla o modo no DifficultyManager e devolve o rótulo à UI (SPEC-009,
+## FR-016, R10): estado do modo vive no manager, a UI só exibe (contracts/
+## ui_commands.md §1). Troca de modo só vale na PRÓXIMA largada (FR-006).
+func _on_select_next_mode() -> void:
+	if dificuldade == null:
+		return
+	dificuldade.ciclar_modo()
+	if ui_root:
+		ui_root.atualizar_modo(_rotulo_modo())
+
+
+## Rótulo pt-BR do modo vigente, 100% de GameConfig.ui_strings (§VI).
+func _rotulo_modo() -> String:
+	if dificuldade == null:
+		return ""
+	return String(GameConfig.ui_strings.get("mode_" + dificuldade.get_modo(), ""))
 
 
 func _aplicar_sprite_selecionado() -> void:
@@ -354,6 +455,10 @@ func _on_restart_race() -> void:
 	# reset — idempotente (R10/SC-012), a corrida nasce limpa de qualquer
 	# estado, inclusive de VICTORY/GAME_OVER.
 	_reset_corrida()
+	# SPEC-009 / SC-010: o reinício reaplica a configuração efetiva —
+	# fatores vigentes do modo/ciclo reafirmados em 100% dos casos, mesmo
+	# se algo externo tiver tocado nos campos injetados.
+	_aplicar_fatores_por_corrida()
 	game_state.start_game()
 
 
@@ -437,6 +542,8 @@ func _show_ready() -> void:
 		items_layer.visible = true
 
 func _show_playing() -> void:
+	# Marca o quadro da entrada para a guarda do ESC em `_processar_playing`.
+	_frame_play = Engine.get_process_frames()
 	if player_vehicle:
 		player_vehicle.set_process(true)
 

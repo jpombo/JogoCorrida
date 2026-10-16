@@ -15,7 +15,8 @@ JogoCorrida/
 │   ├── game/
 │   │   ├── gameplay_manager.gd   # Gerenciador de cena de gameplay
 │   │   ├── gameplay.tscn         # Cena principal
-│   │   └── game_state.gd         # Máquina de estados
+│   │   ├── game_state.gd         # Máquina de estados
+│   │   └── race_progression.gd   # Sequência de ambientes, ciclos e bônus (SPEC-009)
 │   ├── player/
 │   │   ├── player_vehicle.gd     # Veículo do jogador (sprite, collision, posição)
 │   │   └── vehicle_controller.gd # Lógica de controle (input, física)
@@ -39,10 +40,19 @@ JogoCorrida/
 │   │   ├── decoration_data.gd    # Elemento da biblioteca (repeatable, weight)
 │   │   ├── decoration_manager.gd # Biblioteca por ambiente, profundidades, sorteio
 │   │   └── decoration_element.gd # Sprite decorativo (sem colisão)
+│   ├── difficulty/
+│   │   └── difficulty_manager.gd # Modo vigente, 5 fatores por modo e fator de ciclo (SPEC-009)
 │   ├── fuel/
-│   │   └── fuel_system.gd        # Tanque: consumo, penalidade por ambiente e eventos (SPEC-007)
+│   │   └── fuel_system.gd        # Tanque: consumo, penalidade por ambiente e eventos (SPEC-007/008/009)
+│   ├── items/
+│   │   ├── fuel_can.gd           # Galão de combustível (SPEC-008)
+│   │   └── fuel_can_manager.gd   # Geração, pool e reciclagem de galões (SPEC-008/009)
+│   ├── track/
+│   │   ├── track_manager.gd      # Distância da corrida, chegada e progresso (SPEC-008)
+│   │   └── track_markers.gd      # Bandas INÍCIO/CHEGADA e indicador de distância (SPEC-008)
 │   └── ui/
-│       └── fuel_hud.gd           # Barra + rótulo de combustível, somente observador (SPEC-007)
+│       ├── fuel_hud.gd           # Barra + rótulo de combustível, somente observador (SPEC-007)
+│       └── ui_manager.gd         # Menu (3 linhas), pausa, vitória, fim de jogo (SPEC-008/009)
 ├── assets/
 │   ├── background/               # Backgrounds por ambiente (640x480)
 │   ├── decoracao/                # Decoração por ambiente (planice, deserto, floresta, gelo)
@@ -56,7 +66,9 @@ JogoCorrida/
 │   ├── 004-traffic-and-decoration/
 │   ├── 005-collision-drift-system/
 │   ├── 006-npc-collision-system/
-│   └── 007-fuel-system/
+│   ├── 007-fuel-system/
+│   ├── 008-track-progression-fuel-cans/
+│   └── 009-difficulty-balancing/
 └── tests/unit/                   # Testes unitários (GdUnit4)
 ```
 
@@ -149,6 +161,30 @@ JogoCorrida/
 - **Inicialização exclusivamente em READY → PLAYING**: pausar e retomar não recarrega o tanque (FR-002/FR-003)
 - **Balanceamento 100% via configuração** (`fuel_*` + `collision_fuel_penalty`), sem nenhum número fixo na lógica e sem tocar em física, estados ou colisão (FR-026–FR-030); sem Game Over nesta spec (fronteira para a SPEC-008)
 
+### SPEC-008: Progressão da Pista, Estados, Combustível e Galões
+
+- **Corrida com distância total** (`track_total_distance`, 5,0 km por padrão): banda `INÍCIO`/`CHEGADA` criada já na entrada em `READY` e indicador `Distância: 0,0 km / 5,0 km` com barra de progresso (`TrackManager`/`TrackMarkers`)
+- **Ciclo de vida completo de estados**: `MENU` → `READY` → `PLAYING` ↔ `PAUSED` → `VICTORY`/`GAME_OVER`, com telas de menu (destaque da opção ativa), pausa, vitória e fim de jogo — textos 100% externalizados em `GameConfig.ui_strings`
+- **Reset idempotente em 3 pontos** (preparação menu→READY, virada READY→PLAYING e reinício imediato) orquestrando estrada, pista, itens, veículo, trânsito, colisões, decoração e UI; nada avança em segundo plano no menu
+- **Combustível dimensionado pela corrida**: capacidade derivada de `fuel_consumption_per_distance`/`fuel_safety_margin` (corrida de referência com sobra de 15%–35%) + **galões** com pool e reciclagem, geração por distância com taxa por ambiente (planície > deserto > floresta > gelo), piso/teto de 4–12 por corrida e coleta sem efeitos de colisão
+- Aceite manual (quickstart passos 1–12 + calibração) concluído em **2026-10-16 sem problemas e sem ajuste de valores**
+
+### SPEC-009: Dificuldade e Balanceamento
+
+- **Três modos de dificuldade** (`GameConfig.difficulty_modes`), aplicados a jogador, trânsito, combustível e galões por injeção do `DifficultyManager` (fallback 1,0 sem injeção — regressão zero nos testes legados):
+
+| Modo | Velocidade | Densidade | Freq. galões | Penalidade colisão | Dist. galões |
+|---|---|---|---|---|---|
+| Relaxante | 1,0× | 0,70 | 1,50 | 0,50 | 0,80 |
+| Normal (padrão) | 3,0× | 1,00 | 1,00 | 1,00 | 1,00 |
+| Desafio | 4,0× | 1,20 | 0,65 | 1,50 | 1,20 |
+
+- **Seletor de modo na 3ª linha do menu** ("Modo: Relaxante/Normal/Desafio", cicla com `ui_accept` — placeholder da SPEC-013)
+- **Progressão infinita de ambientes** (`environment_sequence` % 4: planície → deserto → floresta → gelo → …) com ciclos de vitória e bônus de **0,2% de velocidade por ciclo** (`RaceProgression`)
+- **Telas de fim da SPEC-009** (FR-020/FR-021, substituem o "Tentar novamente" da SPEC-008): vitória com "Continuar próxima fase" + "Voltar ao menu"; fim de jogo só com "Voltar ao menu"; derrota zera o ciclo atual
+- **Guarda de quadro no ESC**: pausa/retomada nunca acontecem no mesmo quadro da virada de estado — o painel de pausa (com "Voltar ao menu") é sempre desenhado (`tests/unit/pause_esc_test.gd`)
+- Aceite manual (quickstart §3.1–§3.5) concluído em **2026-10-16 sem problemas; calibração §5 não acionada**
+
 ## Configuração
 
 - Resolução: 640x480 (pixel art)
@@ -165,19 +201,21 @@ Tudo é configurável em `src/config/game_config.gd` (autoload `GameConfig`):
 - **Colisão e drift do jogador**: `collision_speed_loss_min/max`, `drift_force_min/max`, `drift_duration_min/max`, `drift_control_factor`, `drift_recovery_rate`, `collision_cooldown_time`, `collision_neutral_margin`, `collision_intensity_divisor`, `npc_overtake_magnitude`/`_duration`/`_return_duration`, `collision_accel_lockout_time`, `player_hitbox_size` e `NPC_HITBOX_SIZES` (hitboxes derivadas do bbox visível: jogador 22×44, passeio/utilitário 22×38, esporte 22×46, caminhão 30×64)
 - **Colisão entre NPCs (SPEC-006)**: `npc_collision_cooldown`, `npc_drift_force_min/max`, `npc_drift_duration_min/max`, `npc_drift_recovery_rate`, `npc_relative_position_threshold`, `npc_border_margin`, `npc_max_chain_depth`, `npc_chain_timeout`, `npc_displacement_limit`, `npc_spawn_safety_distance`, `npc_collision_prediction_horizon`, `npc_min_relative_speed`, `npc_active_area_margin`, `npc_reevaluation_interval` e `npc_player_speed_change_threshold`
 - **Combustível (SPEC-007)**: `fuel_capacity`, `fuel_initial_amount`, `fuel_consumption_idle`, `fuel_consumption_min`/`_max`/`_speed_factor`, `fuel_low_threshold`, `fuel_low_label` e `collision_fuel_penalty` (penalidade por ambiente)
+- **Progressão e galões (SPEC-008)**: `track_total_distance`, `track_units_to_km`, `fuel_consumption_per_distance`, `fuel_safety_margin`, `fuel_can_restore_amount`, `fuel_can_spawn_interval_distance`, `fuel_can_min_spacing`, `fuel_can_npc_spacing`, `fuel_can_start_offset`, `fuel_can_finish_offset`, `fuel_can_max_active`, `fuel_can_min_per_race`/`_max_per_race`, `fuel_can_spawn_rate` (por ambiente), `test_track_sequence` e os rótulos do dicionário `ui_strings`
+- **Dificuldade (SPEC-009)**: `difficulty_modes` (os 5 fatores por modo — tabela acima), `difficulty_default_mode`, `difficulty_cycle_bonus_increment` (0,002 = 0,2% por ciclo) e `environment_sequence`
 - Bibliotecas: `TRAFFIC_CATEGORIES` (velocidade, pasta, assets, frequência) e `DECORATION_LIBRARIES` (`asset`, `repeatable`, `weight`)
-- Agrupamentos somente leitura para o futuro SPEC-008: `traffic_tuning` e `decoration_tuning`
+- Agrupamentos somente leituras expostos por specs anteriores: `traffic_tuning` e `decoration_tuning`
 
 ## Testes
 
-41 suítes GdUnit4 em `tests/unit/`, **259 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution v3.0.0):
+63 suítes GdUnit4 em `tests/unit/`, **388 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution):
 
 ```bash
 GODOT_BIN=<caminho do godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit
 # tudo verde quando o runner sai com exit 101
 ```
 
-Cobertura principal: 6 suítes de combustível (`fuel_*_test.gd`, SPEC-007), 9 suítes de colisão NPC×NPC (`npc_*_test.gd`, SPEC-006), 8 de colisão do jogador (`collision_*_test.gd`, SPEC-005), trânsito (incluindo a sonda de corredor `test_traffic_corridor_probe.gd`, **só-reporta** — evidências A/B/D da pendência FR-046 — e a regressão de textura de NPCs), decoração, estrada, ambiente, física do jogador, performance, regressão do SPEC-004 e constituição.
+Cobertura principal: 12 suítes de dificuldade/progressão (`difficulty_*`/`cycle_*`, SPEC-009) e `pause_esc_test.gd` (guarda de quadro do ESC); 9 de progressão/galões/telas (`track_*`, `fuel_can_*`, `ui_screens`, `race_reset`, `game_config_008`, SPEC-008); 6 de combustível (`fuel_*`, SPEC-007); 9 de colisão NPC×NPC (`npc_*`, SPEC-006); 8 de colisão do jogador (`collision_*`, SPEC-005); trânsito (incluindo a sonda de corredor `test_traffic_corridor_probe.gd`, **só-reporta** — evidências A/B/D da pendência FR-046 — e a regressão de textura de NPCs); decoração; estrada; ambiente; física do jogador; performance; regressão do SPEC-004; e constituição.
 
 Relatórios gerados em `reports/` (ignorados pelo git). Abra o editor Godot uma vez por máquina antes do headless para gerar os `*.import` dos assets.
 
