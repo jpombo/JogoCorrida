@@ -575,3 +575,37 @@ var difficulty_modes: Dictionary = {
 ## Sequência de ambientes da progressão infinita (FR-019, contracts/
 ## environment_cycle.md §1): cicla com % size na virada de fase.
 @export var environment_sequence: Array = ["PLAINS", "DESERT", "FOREST", "ICE"]
+
+# ---------------------------------------------------------------------------
+# SPEC-010 — Áudio
+# ---------------------------------------------------------------------------
+
+## Áudio (SPEC-010) — calibração dos 3 efeitos MP3: tudo que o sistema de
+## áudio lê vive neste bloco (constitution §IV, research R8). Os caminhos e
+## volumes são as únicas sementes de calibração — quickstart §5 ajusta SÓ
+## aqui, nunca na lógica (FR-004/FR-007, contracts/audio_integration.md §4).
+
+## AUD-001 — colisão (1 reprodução por evento, sem loop; liga só em PLAYING).
+@export var audio_colisao_path: String = "res://assets/audio/colisao.mp3"
+
+## AUD-002 — motor de caminhão (loop contínuo aplicado em runtime, R1).
+@export var audio_caminhao_path: String = "res://assets/audio/caminhao.mp3"
+
+## AUD-003 — motor de carro: NPCs não-caminhão e o jogador (loop contínuo).
+@export var audio_carro_path: String = "res://assets/audio/carro.mp3"
+
+## Pool de vozes de colisão — rajadas densas "secando" vozes ⇒ subir 3 → 4/5
+## (quickstart §5). Componente força mínimo 1 (default seguro).
+@export var audio_vozes_colisao: int = 3
+
+## Volume linear dos motores, 0..1 (→ `linear_to_db` uma vez no `configurar`).
+## Motor abafado sob colisão ⇒ subir (quickstart §5).
+@export var audio_volume_motor: float = 0.8
+
+## Volume linear da colisão, 0..1 (→ `linear_to_db` uma vez).
+## Colisão ofuscante ⇒ baixar (quickstart §5).
+@export var audio_volume_colisao: float = 1.0
+
+## `TrafficData.id` que recebe AUD-002; vazio ⇒ nenhum vira caminhão (todos
+## AUD-003 — default seguro do componente, api §2).
+@export var audio_categoria_caminhao: String = "caminhao"

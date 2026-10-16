@@ -62,6 +62,12 @@ var dificuldade: DifficultyManager = DifficultyManager.new()
 ## `environment_sequence` em runtime; não é persistente (fechar o jogo zera).
 var progresso: RaceProgression = RaceProgression.new()
 
+## Áudio da corrida (SPEC-010, FR-006): dono único da reprodução dos 3
+## efeitos (AUD-001/002/003). Criado e configurado em `_ready` (contracts/
+## audio_integration.md §1); nulo nos testes sintéticos que não rodam
+## `_ready` — guards `if audio_manager:` em todo wiring (SC-009).
+var audio_manager: AudioManager = null
+
 ## Seleção de veículo da sessão (SPEC-008, AS2/FR-002): padrão "azul";
 ## só troca o sprite — nunca atributos (SC-001/SC-014).
 var _veiculo_selecionado: String = "azul"
@@ -80,6 +86,23 @@ signal race_lost
 func _ready() -> void:
 	# Conectar signals do GameState
 	game_state.state_changed.connect(_on_state_changed)
+
+	# SPEC-010 / FR-006: criação e configuração do áudio ANTES das conexões
+	# de trânsito e de colisão (ordem de contracts/audio_integration.md §1).
+	# A pool de motor deriva de traffic_max_vehicles + 1 (R5 — fonte única
+	# da densidade; jogador incluído).
+	audio_manager = AudioManager.new()
+	add_child(audio_manager)
+	audio_manager.configurar({
+		"colisao_path": GameConfig.audio_colisao_path,
+		"caminhao_path": GameConfig.audio_caminhao_path,
+		"carro_path": GameConfig.audio_carro_path,
+		"vozes_colisao": GameConfig.audio_vozes_colisao,
+		"vozes_motor": GameConfig.traffic_max_vehicles + 1,
+		"volume_motor": GameConfig.audio_volume_motor,
+		"volume_colisao": GameConfig.audio_volume_colisao,
+		"categoria_caminhao": GameConfig.audio_categoria_caminhao,
+	})
 
 	# Configurar ambiente atual
 	environment_manager.set_environment(GameConfig.current_environment_id)
@@ -109,6 +132,14 @@ func _ready() -> void:
 		traffic_layer.vehicle_recycled.connect(
 			func(_v): npc_collision_system.marcar_reavaliacao()
 		)
+		# SPEC-010 / FR-002, R5: o som de motor acompanha o ciclo de vida
+		# completo do veículo (nascimento e reciclagem).
+		traffic_layer.vehicle_spawned.connect(
+			func(v): audio_manager.ao_veiculo_surgir(v)
+		)
+		traffic_layer.vehicle_recycled.connect(
+			func(v): audio_manager.ao_veiculo_sair(v)
+		)
 	if road:
 		road.segment_type_changed.connect(
 			func(_tipo): npc_collision_system.marcar_reavaliacao()
@@ -123,6 +154,17 @@ func _ready() -> void:
 	# válido — SPEC-005) desconta combustível, com a penalidade lida no
 	# momento do evento; sem deduplicação própria (FR-013).
 	collision_system.collision_occurred.connect(fuel_system.on_player_collision)
+
+	# SPEC-010 / FR-001 (Clarification Q1): AUD-001 em toda colisão
+	# veicular relevante — jogador×NPC e NPC×NPC — 1 reprodução por evento,
+	# payload ignorado, sem deduplicação própria (os sistemas SPEC-005/006
+	# já emitem 1 evento por encontro).
+	collision_system.collision_occurred.connect(
+		func(_d): audio_manager.tocar_colisao()
+	)
+	npc_collision_system.npc_collision_occurred.connect(
+		func(_d): audio_manager.tocar_colisao()
+	)
 
 	# SPEC-007 / T016: o HUD observa desde a origem; `setup` idempotente (H4).
 	# Nulo apenas se a cena não tiver a camada (testes sem a árvore).
@@ -238,6 +280,17 @@ func _processar_playing(delta: float) -> void:
 			and Engine.get_process_frames() > _frame_play:
 		game_state.pause_game()
 		return
+
+	# SPEC-010 / FR-003 (Clarification Q3, R11): gate por quadro do som do
+	# jogador — só toca com acelerador pressionado E sem freio (condição
+	# idêntica à fase de aceleração do VehicleController); NPCs são
+	# contínuos (FR-002). Custo: 1 chamada + 2 checagens de input/quadro,
+	# sem alocação — o AudioManager segue sem `_process`.
+	if audio_manager:
+		audio_manager.ao_aceleracao_jogador(
+			Input.is_action_pressed("accelerate")
+			and not Input.is_action_pressed("brake")
+		)
 
 	# 1. Rolagem da estrada e do fundo
 	if player_vehicle and road:
@@ -506,6 +559,12 @@ func _on_state_changed(new_state: int, old_state: int) -> void:
 			_show_victory()
 		game_state.State.GAME_OVER:
 			_show_game_over()
+
+	# SPEC-010 / FR-006: encaminha POR ÚLTIMO — depois do reset e da
+	# exibição (contracts/audio_integration.md §3). O encaminhamento é
+	# síncrono por transição: em viradas no mesmo quadro, a última vence.
+	if audio_manager:
+		audio_manager.ao_alterar_estado(new_state, old_state)
 
 func _show_menu() -> void:
 	# T060 / US1 AS1 + FR-036: nada processa input em segundo plano no menu —
