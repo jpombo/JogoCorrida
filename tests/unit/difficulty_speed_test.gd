@@ -3,9 +3,9 @@ extends GdUnitTestSuite
 ## SPEC-009 / T004 (US1) — velocidade do modo: jogador e NPCs 1×/3×/4×
 ## (SC-001/SC-002), bases nunca mutadas (FR-003), 5 reinícios sem acúmulo,
 ## curva normalizada coincidente e timers de largada inalterados (SC-003),
-## distância idêntica nos 3 modos (SC-004) e colisão detectada em 3×/4×
+## distância idêntica nos 3 modos (SC-004), colisão detectada em 3×/4×
 ## com penalidade aplicada uma única vez (SC-009, FR-014; R4 — sem
-## substepping).
+## substepping) e teto efetivo com bônus de ciclo (SC-016).
 
 const ACOES: Array[String] = ["accelerate", "brake", "move_left", "move_right"]
 const FATOR_PADRAO: float = 1.0
@@ -257,3 +257,42 @@ func test_09_colisao_em_3x_e_4x_penalidade_unica() -> void:
 		jogador.free()
 		fuel.free()
 	GameConfig.current_environment_id = "PLAINS"
+
+
+## SC-016 — teto efetivo com bônus de ciclo: base × modo × (1 + 0,002 ×
+## ciclos), com desvio menor de 1% nas duas medições (jogador e NPC).
+func test_10_velocidade_efetiva_com_ciclo() -> void:
+	var dm := DifficultyManager.new()
+	dm.definir_modo("normal")  # 3,0×
+	# Ciclo 100 → fator 1,200 (bônus configurável de difficulty_cycle_bonus_increment).
+	dm.aplicar_fator_ciclo(1.0 + GameConfig.difficulty_cycle_bonus_increment * 100.0)
+	var fator := dm.fator_velocidade_total()  # 3,0 × 1,200 = 3,600
+	assert_float(fator).is_equal_approx(3.6, 0.0001).override_failure_message(
+		"Fator composto (modo × ciclo) difere de 3,600"
+	)
+
+	var controller := VehicleController.new()
+	controller.fator_dificuldade = fator
+	Input.action_press("accelerate")
+	controller.speed = 0.0
+	for i in 200:
+		controller._process(1.0 / 60.0)
+	Input.action_release("accelerate")
+	var teto_esperado := GameConfig.max_speed * fator
+	assert_float(controller.speed).is_equal_approx(
+		teto_esperado, teto_esperado * 0.01
+	).override_failure_message(
+		"Teto do jogador com ciclo 100 fora da tolerância de 1%% (SC-016)"
+	)
+
+	var npc := _npc("passeio", Vector2.ZERO, fator)
+	var npc_esperado := 100.0 * GameConfig.KMH_TO_SPEED_UNIT * fator
+	assert_float(npc.get_speed()).is_equal_approx(
+		npc_esperado, npc_esperado * 0.01
+	).override_failure_message("NPC passeio com ciclo 100 fora da tolerância de 1%% (SC-016)")
+	# Bases intactas mesmo com o bônus aplicado (FR-003/SC-002).
+	assert_float(
+		float(GameConfig.TRAFFIC_CATEGORIES["passeio"]["max_speed_kmh"])
+	).is_equal(100.0)
+	npc.free()
+	controller.fator_dificuldade = FATOR_PADRAO

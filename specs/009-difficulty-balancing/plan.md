@@ -23,7 +23,7 @@ Três modos de dificuldade (Relaxante 1,0×, Normal 3,0×, Desafio 4,0×) com mu
 
 **Storage**: N/A (parâmetros no autoload `GameConfig`; modo e progresso vivem na sessão, sem persistência — recordes fora do escopo)
 
-**Testing**: GdUnit4 em `tests/unit/` (50 suítes/324 casos atuais + 9 novas `difficulty_*`/`cycle_*`; runner `addons/gdUnit4/runtest.sh --headless` — exit 101 quando verde)
+**Testing**: GdUnit4 em `tests/unit/` (50 suítes/324 casos legados + **13 novas** — `difficulty_*` (10), `cycle_*` (2) e `pause_esc` (1) — total **63 suítes/389 casos**; runner `addons/gdUnit4/runtest.sh --headless` — exit 101 quando verde)
 
 **Target Platform**: Desktop (Linux, Windows, macOS) via Godot export templates
 
@@ -42,7 +42,7 @@ Três modos de dificuldade (Relaxante 1,0×, Normal 3,0×, Desafio 4,0×) com mu
 - Textos de usuário externalizados em `GameConfig.ui_strings`; docs/comentários em pt-BR (§VI)
 - Zero regressão das SPEC-001–008; controles, assets e hitboxes intocados (FR-018)
 
-**Scale/Scope**: 4 user stories, 23 FRs, 17 SCs, 3 entidades novas, ~10 parâmetros novos de configuração, 2 scripts novos (`difficulty_manager.gd`, `race_progression.gd`), 1 diretório novo (`src/difficulty/`), wiring aditivo em 8 scripts existentes (+campos/métodos, nenhum reescrito), 9 suítes novas
+**Scale/Scope**: 4 user stories, 23 FRs, 17 SCs, 3 entidades novas, ~10 parâmetros novos de configuração, 2 scripts novos (`difficulty_manager.gd`, `race_progression.gd`), 1 diretório novo (`src/difficulty/`), wiring aditivo em 8 scripts existentes (+campos/métodos, nenhum reescrito), 13 suítes novas (9 do plano + 4 das Phases 8–10)
 
 ## Constitution Check
 
@@ -118,7 +118,7 @@ src/
 
 tests/unit/
 ├── difficulty_manager_test.gd        # NOVO — modos, fatores, fallback
-├── difficulty_speed_test.gd          # NOVO — jogador/NPCs 1×/3×/4×, base preservada, sem acúmulo
+├── difficulty_speed_test.gd          # NOVO — jogador/NPCs 1×/3×/4×, base preservada, sem acúmulo, bônus de ciclo (SC-016)
 ├── difficulty_fuel_test.gd           # NOVO — consumo por km constante, penalidade × fator
 ├── difficulty_traffic_can_test.gd    # NOVO — densidade, ordem de frequência, limites
 ├── cycle_progression_test.gd         # NOVO — sequência, bônus 0,002, derrota zera ciclo
@@ -126,6 +126,10 @@ tests/unit/
 ├── difficulty_environment_matrix_test.gd # NOVO — 4 ambientes × 3 modos (SC-011)
 ├── difficulty_stability_test.gd       # NOVO — cenário máximo 4,0× + 1,20× (SC-013)
 ├── difficulty_state_flow_test.gd      # NOVO — estados por modo, pausa/reinício (SC-010)
+├── difficulty_combo_reference_test.gd # NOVO — corrida de referência nas 12 combinações (SC-011; Phase 8)
+├── difficulty_menu_selector_test.gd   # NOVO — menu de 3 linhas: wrapi, rótulo, sinal (FR-016/017; Phase 8)
+├── difficulty_menu_flow_test.gd       # NOVO — composição do seletor no orquestrador (FR-016; Phase 9)
+├── pause_esc_test.gd                  # NOVO — guarda de quadro do ESC: pausa/retomada (T037; Phase 10)
 └── (suítes existentes permanecem verde — regressão 1,0×)
 ```
 

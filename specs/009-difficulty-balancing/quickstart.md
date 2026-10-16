@@ -61,7 +61,7 @@ GODOT_BIN=$HOME/Downloads/_installers/Godot_v4.7.2-stable_linux.x86_64 \
 
 ## 4. Validação automatizada
 
-Rodar a suíte completa (comando §2). Além das 50 suítes existentes (regressão — devem permanecer verdes sem ajuste), as suítes novas cobrem:
+Rodar a suíte completa (comando §2 — **63 suítes, 389 casos, exit 101**). Além das 50 suítes legadas (regressão — devem permanecer verdes sem ajuste), as **13** suítes novas cobrem:
 
 | Suíte | Cobre |
 |-------|-------|
@@ -77,6 +77,7 @@ Rodar a suíte completa (comando §2). Além das 50 suítes existentes (regress�
 | `difficulty_menu_flow_test` | composição do seletor no orquestrador: sinal → `_on_select_next_mode` cicla o modo, rótulo acompanha, guardas de null (FR-016/US1-AC9) |
 | `cycle_progression_test` | sequência % 4, fator 1+0,002×ciclos, derrota zera ciclo (SC-015–017) |
 | `cycle_flow_test` | opções das telas, `continue_next_phase`, sync de ambiente (SC-014) |
+| `pause_esc_test` | guarda de quadro do ESC: pausa/retomada nunca no mesmo quadro; painel de pausa sempre desenhado (T037) |
 
 ## 5. Calibração (após o aceite)
 

@@ -208,7 +208,7 @@ Tudo é configurável em `src/config/game_config.gd` (autoload `GameConfig`):
 
 ## Testes
 
-63 suítes GdUnit4 em `tests/unit/`, **388 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution):
+63 suítes GdUnit4 em `tests/unit/`, **389 casos verdes** (inclui `test_constitution.gd`, regressão dos princípios da constitution):
 
 ```bash
 GODOT_BIN=<caminho do godot> bash addons/gdUnit4/runtest.sh --headless --ignoreHeadlessMode -c -a res://tests/unit

@@ -4,7 +4,7 @@
 
 **Prerequisites**: plan.md, spec.md (4 US), research.md (R1–R13), data-model.md, contracts/ (difficulty_manager_api, environment_cycle, ui_commands), quickstart.md
 
-**Tests**: **Incluídos** — a spec pede explicitamente "Testes de balanceamento e regressão" (§2.1) e 9 suítes novas `difficulty_*`/`cycle_*` no plan (R12 exige regressão verde das 50 suítes legadas sem ajuste).
+**Tests**: **Incluídos** — a spec pede explicitamente "Testes de balanceamento e regressão" (§2.1) e 13 suítes novas (`difficulty_*`/`cycle_*` do plan + `difficulty_combo_reference`/`difficulty_menu_selector`/`difficulty_menu_flow`/`pause_esc` das Phases 8–10; R12 exige regressão verde das 50 suítes legadas sem ajuste — total final 63 suítes/389 casos).
 
 **Organization**: tarefas agrupadas por user story; cada fase é um incremento testável independente.
 
@@ -103,7 +103,7 @@
 ### Implementation for User Story 3
 
 - [X] T018 [US3] Estender src/traffic/traffic_manager.gd: `_maximo_visivel_atual()` = `teto_ambiente × fator_densidade` com `clamp(..., traffic_min_visible, traffic_max_vehicles)` — leitura única no `_tentar_gerar` (R5)
-- [X] T019 [US3] Estender src/items/fuel_can_manager.gd: campos `dificuldade` (ref) e fallback 1.0; aplicar `fator_freq` na taxa de spawn e `fator_dist` no intervalo de distância em `_tentar_gerar` (R6)
+- [X] T019 [US3] Estender src/items/fuel_can_manager.gd: campos `dificuldade` (ref) e fallback 1.0; aplicar `fator_freq` na taxa de spawn e `fator_dist` no intervalo de distância em `_tentar_gerar` (R6) — **cobertura do edge case "adiar a geração em conflito com o espaço mínimo" (spec.md Edge Cases)**: mecanismo exercitado pela suíte legada `tests/unit/fuel_can_generation_test.gd` (`test_f5_espacamento_entre_galoes`, fator 1,0) + intervalo efetivo sempre > 0 na `difficulty_traffic_can_test` (SC-006)
 - [X] T020 [US3] Estender src/fuel/fuel_system.gd: campo `fator_penalidade_colisao` (default 1.0); `on_player_collision` aplica penalidade do ambiente × fator, nunca negativa (R7, FR-010, SC-007)
 - [X] T021 [US3] Estender tests/unit/difficulty_fuel_test.gd (parte penalidade): penalidade = ambiente × modo (Desafio 1,5×; Relaxante 0,5×), aplicação única por colisão, penalidade base 0 × fator = 0 (SC-007)
 
@@ -150,7 +150,7 @@
 - **US1 (Phase 3)**: depende do Phase 2 — sem dependências de outras US
 - **US2 (Phase 4)**: depende do Phase 2; integra com US1 (fator de velocidade injetado) mas é testável de forma independente
 - **US3 (Phase 5)**: depende do Phase 2; usa os mesmos pontos de injeção da US1 (density/cans/penalidade), sem dependência funcional da US2
-- **US4 (Phase 6)**: depende das US 1–3 para o matricial; o contrato de superfície (T023) pode ser conferido a partir do Phase 2
+- **US4 (Phase 6)**: depende das US 1–3 para o matricial; o contrato de superfície (T023) pode ser conferido a partir do Phase 2; a **integração matricial é entregue por T030** (Phase 8 — corrida de referência nas 12 combinações), que fecha a implementação desta história
 - **Polish (Phase 7)**: depende das US desejadas (MVP = US1); a suíte de estabilidade (T024) exige US1+US3 implementadas
 
 ### User Story Dependencies
@@ -220,7 +220,7 @@ Task: "src/game/gameplay_manager.gd (T011 — wiring final)"
 - [P] = arquivos distintos, sem dependências entre tarefas pendentes
 - Cada tarefa de wiring no `gameplay_manager.gd` serializa (mesmo arquivo)
 - Fallback 1,0 em todo ponto de injeção garante que a regressão de 324 casos rode sem tocar nas suítes legadas
-- Pendências manuais (T028) seguem o padrão T053/T055 da SPEC-008 — ficam `[ ]` até o usuário rodar o quickstart
+- Pendência manual (T028) seguia o padrão T053/T055 da SPEC-008 — concluída em 2026-10-16 (Phase 11)
 
 ---
 
@@ -230,7 +230,7 @@ Task: "src/game/gameplay_manager.gd (T011 — wiring final)"
 - [X] T030 Criar teste de corrida de referência automatizada para as 12 combinações (4 ambientes × 3 modos): executar os updates de trânsito, galões, combustível e pista em cada combinação sem falha de script — per SC-011 (partial)
 - [X] T031 Criar teste automatizado do menu de 3 linhas: navegação `wrapi(0,3)`, rótulo inicial "Modo: Normal", `ui_accept` na linha 1 emite `select_next_mode` e `atualizar_modo` reflete o novo rótulo — per FR-016, US1/AC9 (partial)
 - [X] T032 Acrescentar à suíte de estabilidade a contagem de nascimentos de NPCs ao longo do tempo (nascimentos seguem ocorrendo após reinício e em corrida longa — 0 bloqueios permanentes) — per SC-005 (partial)
-- [X] T033 Atualizar a tabela de validação automatizada do quickstart.md (§4) para listar as 9 suítes novas — faltam `difficulty_environment_matrix_test`, `difficulty_stability_test` e `difficulty_state_flow_test` — per plan.md Testing (partial)
+- [X] T033 Atualizar a tabela de validação automatizada do quickstart.md (§4) para listar as 9 suítes novas do plano — faltam `difficulty_environment_matrix_test`, `difficulty_stability_test` e `difficulty_state_flow_test` (a tabela hoje lista as 13, com `difficulty_combo_reference`/`menu_selector`/`menu_flow` das Phases 8–9 e `pause_esc_test` da Phase 10) — per plan.md Testing (partial)
 
 ## Phase 9: Convergence
 
@@ -240,17 +240,17 @@ Task: "src/game/gameplay_manager.gd (T011 — wiring final)"
 
 ## Phase 10: Ajustes pós-implementação (2026-10-14)
 
-- [X] T037 [correção] Menu de pausa do ESC não aparecia durante a corrida: o mesmo `ui_cancel` que pausava continuava "just pressed" no quadro da virada PLAYING → PAUSED e a UI retomava no mesmo quadro (o painel — e a opção "Voltar ao menu" — nunca era desenhado). Guarda de quadro nos dois lados: `_frame_pausa` em `src/ui/ui_manager.gd` (`_aplicar_estado`/`_process_pausa`) e `_frame_play` em `src/game/gameplay_manager.gd` (`_show_playing`/`_processar_playing`), tornando o resultado independente da ordem de processamento entre os nós — per contracts/ui_commands.md §3, FR-034
+- [X] T037 [correção] Menu de pausa do ESC não aparecia durante a corrida: o mesmo `ui_cancel` que pausava continuava "just pressed" no quadro da virada PLAYING → PAUSED e a UI retomava no mesmo quadro (o painel — e a opção "Voltar ao menu" — nunca era desenhado). Guarda de quadro nos dois lados: `_frame_pausa` em `src/ui/ui_manager.gd` (`_aplicar_estado`/`_process_pausa`) e `_frame_play` em `src/game/gameplay_manager.gd` (`_show_playing`/`_processar_playing`), tornando o resultado independente da ordem de processamento entre os nós — per `specs/008-track-progression-fuel-cans/contracts/ui_commands.md` §3 (contrato base) e **FR-034 da SPEC-008** (pausa com "Continuar"/"Reiniciar"/"Voltar ao menu" — a SPEC-009 não tem FR-034; os fluxos de fim desta spec são FR-020/FR-021)
 - [X] T038 [ajuste] Adendo de 2026-10-14 (spec.md Clarifications): Normal 2,0× → **3,0×** e Desafio 3,0× → **4,0×** (quádruplo) em `src/config/game_config.gd` — Relaxante e os demais 4 fatores por modo inalterados; valores propagados nas suítes `difficulty_manager_test`, `difficulty_environment_matrix_test`, `difficulty_state_flow_test`, `difficulty_speed_test` e `difficulty_stability_test` (cenário máximo 4,0×) e no texto de spec/plan/quickstart/research/data-model/tasks — per FR-001, SC-001, SC-013
 
 ## Phase 11: Aceite manual (2026-10-16)
 
 **Purpose**: Execução do quickstart §3.1–§3.5 pelo usuário no build completo (inclui os ajustes da Phase 10 — guarda de quadro do ESC e multiplicadores 3,0×/4,0×); registro exigido pelo T028.
 
-- [X] T028 Aceite manual do usuário — **sem problemas identificados**:
+**T028 — resultado do aceite manual (executado em 2026-10-16)** — **sem problemas identificados**:
   - **§3.1 Menu e seleção de modo** (passos 1–4): menu com 3 linhas e destaque navegável, ciclo Relaxante → Normal → Desafio no rótulo "Modo", largada em Normal sem aceleração instantânea e sem acúmulo de velocidade entre corridas.
   - **§3.2 Os três modos (velocidade)** (passos 5–8): Relaxante 1,0× idêntico à base (regressão zero), Normal 3,0×, Desafio 4,0× com colisões continuamente detectadas e pausa congelando tudo; direção e resposta de aceleração/frenagem inalteradas entre modos.
-  - **§3.3 Balanceamento por modo** (passos 9–11): densidade, frequência de galeões e penalidade de colisão na ordem esperada por modo; corrida de referência de 5 km **concluível nos 3 modos** com sobra de combustível dentro da faixa — nenhum caso de inconcluibilidade a registrar.
+  - **§3.3 Balanceamento por modo** (passos 9–11): densidade, frequência de galões e penalidade de colisão na ordem esperada por modo; corrida de referência de 5 km **concluível nos 3 modos** com sobra de combustível dentro da faixa — nenhum caso de inconcluibilidade a registrar.
   - **§3.4 Progressão infinita** (passos 12–18): vitória com exatamente 2 opções, "Continuar próxima fase" avançando planície → deserto → floresta → gelo → planície com tanque cheio, bônus de ciclo por suíte `cycle_*`, derrota levando ao fim de jogo com apenas "Voltar ao menu" e reinício na planície, e as 12 combinações ambiente × modo sem quebra.
   - **§3.5 Combustível e estados** (passos 19–20): esgotamento em 3,0×/4,0× levando ao `GAME_OVER` com desaceleração gradual, vitória exigindo combustível na chegada, pausa/retomada sem alterar multiplicadores e nenhum sistema avançando no menu (guarda de quadro do ESC da Phase 10 funcionando — painel de pausa com "Voltar ao menu" visível).
   - **Calibração §5**: **não acionada** — nenhum ajuste dos fatores do bloco `difficulty_modes`/`difficulty_*` em `src/config/game_config.gd` foi necessário; sementes mantidas como estão.
