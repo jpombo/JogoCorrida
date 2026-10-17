@@ -46,6 +46,13 @@ var fator_velocidade: float = 1.0
 ## `fator_velocidade` (reset preserva).
 var fator_penalidade_colisao: float = 1.0
 
+## Combustível perdido ESPECIFICAMENTE em colisões na corrida corrente
+## (SPEC-011, FR-007; research R4): acumula o delta REAL descontado em
+## `on_player_collision` (já com fator do modo e clamp) — consumo normal
+## nunca entra. Zerado em `reset()`; lido pelo orquestrador na vitória para
+## a penalidade da pontuação (contracts/progress_manager_api.md §2).
+var perda_colisao_corrida: float = 0.0
+
 
 ## Define (ou limpa, com negativo) a capacidade da corrida — SPEC-008,
 ## FR-018/FR-019. Chamado pelo GameplayManager ANTES do reset() na largada
@@ -76,6 +83,7 @@ func restaurar(valor: float) -> void:
 func reset() -> void:
 	_baixo_sinalizado = false
 	_esgotado_emitido = false
+	perda_colisao_corrida = 0.0
 	if _capacidade_derivada >= 0.0:
 		_capacidade = _capacidade_derivada
 	else:
@@ -116,7 +124,11 @@ func on_player_collision(_data = null) -> void:
 	)
 	if penalidade <= 0.0:
 		return
+	var antes: float = _atual
 	_escrever(clampf(_atual - penalidade, 0.0, _capacidade))
+	# SPEC-011 / FR-007 (research R4): espelha o delta REAL descontado —
+	# o clamp do tanque garante que a perda nunca excede o disponível.
+	perda_colisao_corrida += maxf(antes - _atual, 0.0)
 	_avaliar_limiar()
 
 
@@ -134,6 +146,10 @@ func get_atual() -> float:
 
 func get_capacidade() -> float:
 	return _capacidade
+
+
+func get_perda_colisao_corrida() -> float:
+	return perda_colisao_corrida
 
 
 ## Modelo linear de consumo (research R1): repouso usa o consumo em repouso;

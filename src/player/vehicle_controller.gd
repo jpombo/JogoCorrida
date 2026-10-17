@@ -32,6 +32,16 @@ var aceleracao_bloqueada_por_combustivel: bool = false
 ## e é reafirmado na largada (contracts/difficulty_manager_api.md §4).
 var fator_dificuldade: float = 1.0
 
+## Efeito temporizado do CASCALHO (SPEC-011, FR-015/FR-016; research R5):
+## limita o teto da velocidade a `max_speed × fator_dificuldade × fator` a
+## cada quadro; a estabilidade opcional entra em `efeito_aderencia_cascalho`
+## (config 1,0 = desligada). Inerte. A POÇA não tem mais efeito temporal —
+## no aceite T032 ela virou desvio lateral de meio carro aplicado pelo
+## `ObstacleManager` (FR-014 ajustado).
+var efeito_velocidade_tempo: float = 0.0
+var efeito_velocidade_fator: float = 1.0
+var efeito_aderencia_cascalho: float = 1.0
+
 ## Delta do frame atual
 var current_delta: float = 0.0
 
@@ -54,9 +64,25 @@ func _process(delta: float) -> void:
 	current_delta = delta
 	if aceleracao_bloqueada > 0.0:
 		aceleracao_bloqueada = max(aceleracao_bloqueada - delta, 0.0)
+	# SPEC-011 / FR-016: o efeito de obstáculo (cascalho) só avança enquanto o
+	# processamento do jogador está ligado (PLAYING) — a pausa congela via
+	# `set_process(false)` do PlayerVehicle (congelamento por construção).
+	if efeito_velocidade_tempo > 0.0:
+		efeito_velocidade_tempo = maxf(efeito_velocidade_tempo - delta, 0.0)
 	_apply_vertical_physics(delta)
 	_apply_lateral_physics(delta)
 	speed_changed.emit(speed)
+
+## Cascalho (SPEC-011, FR-015): renovação por SOBRESCRITA — colisão
+## repetida durante o efeito redefine fator e duração, nunca empilha
+## intensidade nem dobra o tempo (FR-016); `fator_aderencia` é a
+## estabilidade opcional (1,0 = off).
+func aplicar_efeito_cascalho(
+	duracao: float, fator_velocidade: float, fator_aderencia: float = 1.0
+) -> void:
+	efeito_velocidade_tempo = maxf(duracao, 0.0)
+	efeito_velocidade_fator = clampf(fator_velocidade, 0.001, 1.0)
+	efeito_aderencia_cascalho = maxf(fator_aderencia, 0.001)
 
 ## Calcular física vertical (aceleração, frenagem, inércia).
 ## SPEC-009 / R1-R2: teto, aceleração, frenagem e desaceleração natural
@@ -74,22 +100,45 @@ func _apply_vertical_physics(delta: float) -> void:
 		speed = max(speed - GameConfig.brake_force * fator * delta, 0.0)
 	else:
 		speed = max(speed - GameConfig.natural_deceleration * fator * delta, 0.0)
+	# SPEC-011 / FR-015: enquanto o cascalho está ativo o teto EFETIVO é
+	# rebaixado e o speed é limitado a cada quadro — redução imediata e
+	# perceptível; ao expirar o teto normal volta sozinho (FR-016).
+	if efeito_velocidade_tempo > 0.0:
+		var teto_efeito: float = (
+			GameConfig.max_speed * fator * efeito_velocidade_fator
+		)
+		if speed > teto_efeito:
+			speed = teto_efeito
 
 ## Calcular física lateral (independente do vertical).
 ## A resposta é multiplicada por `control_factor` (SPEC-005): durante o drift
 ## o jogador mantém controle parcial, nunca zero (FR-013).
+## SPEC-011 / FR-014: só o CASCALHO entra como fator ADICIONAL
+## multiplicativo sobre os três termos laterais (a poça não mexe em
+## aderência — T032; seu efeito é o desvio em `_impacto_obstaculo`);
+## o DriftState permanece intocado (research R5).
 func _apply_lateral_physics(delta: float) -> void:
-	var aceleracao: float = GameConfig.lateral_acceleration * control_factor
-	var teto: float = GameConfig.lateral_speed * control_factor
+	var aderencia: float = _fator_aderencia_efetivo()
+	var aceleracao: float = GameConfig.lateral_acceleration * control_factor * aderencia
+	var teto: float = GameConfig.lateral_speed * control_factor * aderencia
 	if Input.is_action_pressed("move_left"):
 		lateral_speed = max(lateral_speed - aceleracao * delta, -teto)
 	elif Input.is_action_pressed("move_right"):
 		lateral_speed = min(lateral_speed + aceleracao * delta, teto)
 	else:
+		var desaceleracao: float = GameConfig.lateral_deceleration * aderencia
 		if lateral_speed > 0:
-			lateral_speed = max(lateral_speed - GameConfig.lateral_deceleration * delta, 0.0)
+			lateral_speed = max(lateral_speed - desaceleracao * delta, 0.0)
 		else:
-			lateral_speed = min(lateral_speed + GameConfig.lateral_deceleration * delta, 0.0)
+			lateral_speed = min(lateral_speed + desaceleracao * delta, 0.0)
+
+## Fator de aderência vigente: só a estabilidade do cascalho (1,0 = off).
+## A poça saiu do domínio do veículo no aceite T032 — ela desvia o carro
+## via ObstacleManager sem deixar efeito residual (FR-014 ajustado; R12).
+func _fator_aderencia_efetivo() -> float:
+	if efeito_velocidade_tempo > 0.0:
+		return efeito_aderencia_cascalho
+	return 1.0
 
 ## Retornar posição Y normalizada baseada na velocidade.
 ## SPEC-009: a normalização usa o teto EFETIVO (max_speed × fator) — a mesma
@@ -138,5 +187,9 @@ func reset() -> void:
 	control_factor = 1.0
 	aceleracao_bloqueada = 0.0
 	aceleracao_bloqueada_por_combustivel = false
+	# SPEC-011 / FR-016: o efeito de cascalho morre com a corrida.
+	efeito_velocidade_tempo = 0.0
+	efeito_velocidade_fator = 1.0
+	efeito_aderencia_cascalho = 1.0
 	current_left_boundary = GameConfig.road_left_boundary
 	current_right_boundary = GameConfig.road_right_boundary

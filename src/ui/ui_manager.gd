@@ -43,6 +43,12 @@ var _opcao_gameover: int = 0
 var _opcao_menu: int = 0
 var _veiculo_indice: int = 0
 
+## Bloco de progressão (SPEC-011, FR-012/FR-023; contracts/
+## ui_progress_display.md): um conjunto por painel (menu/vitória/game over),
+## atualizado em conjunto por `atualizar_painel_progresso`.
+var _blocos_progresso: Array[Dictionary] = []
+var _texturas_trofeu: Dictionary = {}
+
 ## Quadro em que o estado entrou em PAUSED (guarda do ESC — ver _process_pausa).
 var _frame_pausa: int = -1
 
@@ -51,7 +57,19 @@ var _configurado: bool = false
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_carregar_texturas_trofeu()
 	_construir_paineis()
+
+
+## Texturas dos ícones de troféu carregadas 1× (FR-013, research R11):
+## arquivo ausente ⇒ modo fica sem ícone, sem erro de console (SC-012).
+func _carregar_texturas_trofeu() -> void:
+	for modo in GameConfig.trofeu_assets:
+		var caminho: String = String(GameConfig.trofeu_assets[modo])
+		if ResourceLoader.exists(caminho):
+			var textura = load(caminho)
+			if textura != null:
+				_texturas_trofeu[modo] = textura
 
 
 ## Liga o observador aos modelos. Idempotente (H4): reconectar no mesmo par é
@@ -224,12 +242,73 @@ func _posicionar_destaque_menu() -> void:
 ## Atualiza a linha "Modo" do menu com o rótulo recebido (FR-017, R10): a UI
 ## só exibe — o estado do modo vive no DifficultyManager e a sincronização
 ## é do GameplayManager (contracts/ui_commands.md §1/§5).
-func atualizar_modo(rotulo: String) -> void:
-	if _rotulo_modo == null:
+## SPEC-011 / SC-006: com o id do modo, o ícone de troféu acompanha a linha.
+func atualizar_modo(rotulo: String, modo_id: String = "") -> void:
+	if _rotulo_modo != null:
+		_rotulo_modo.text = "%s: %s" % [
+			String(GameConfig.ui_strings.get("mode_label", "")), rotulo
+		]
+	if modo_id != "":
+		_aplicar_icone_trofeu(modo_id)
+
+
+## Atualiza o bloco de progressão dos painéis de menu/vitória/Fim de Jogo a
+## partir do snapshot do ProgressManager (SPEC-011, FR-012/FR-023;
+## data-model §1.5). T041 / contract §5: sem snapshot (nulo ou vazio) é no-op
+## real — nunca escreve defaults sobre painéis já exibidos.
+func atualizar_painel_progresso(dados: Dictionary) -> void:
+	if dados == null or dados.is_empty():
 		return
-	_rotulo_modo.text = "%s: %s" % [
-		String(GameConfig.ui_strings.get("mode_label", "")), rotulo
+	var d: Dictionary = dados
+	var recorde: float = float(d.get("recorde", 0.0))
+	var acumulada: float = float(d.get("acumulada", 0.0))
+	var trofeus: int = int(d.get("trofeus", 0))
+	var progresso_k: int = int(d.get("progresso_k", 0))
+	var pontuacao: float = float(d.get("pontuacao", -1.0))
+	var desbloqueado: bool = bool(d.get("desbloqueado", false))
+	var texto_trofeus: String = String(GameConfig.ui_strings.get("trophy_format", "")) \
+		% [trofeus, progresso_k]
+	var texto_recorde: String = "%s: %.1f" % [
+		String(GameConfig.ui_strings.get("record_label", "")), recorde
 	]
+	var texto_acumulada: String = "%s: %.1f" % [
+		String(GameConfig.ui_strings.get("accumulated_label", "")), acumulada
+	]
+	var texto_pontuacao: String = String(GameConfig.ui_strings.get("victory_score", "")) \
+		% pontuacao
+	var texto_obstaculos: String = String(GameConfig.ui_strings.get(
+		"obstacles_available" if desbloqueado else "obstacles_locked", ""
+	))
+	for bloco in _blocos_progresso:
+		var rotulo: Label = bloco.get("trofeus")
+		if rotulo != null:
+			rotulo.text = texto_trofeus
+		rotulo = bloco.get("recorde")
+		if rotulo != null:
+			rotulo.text = texto_recorde
+		rotulo = bloco.get("acumulada")
+		if rotulo != null:
+			rotulo.text = texto_acumulada
+		rotulo = bloco.get("pontuacao")
+		if rotulo != null:
+			rotulo.text = texto_pontuacao
+			# FR-003/Q2-B: derrota/menu não têm pontuação de corrida.
+			rotulo.visible = pontuacao > 0.0
+		rotulo = bloco.get("obstaculos")
+		if rotulo != null:
+			rotulo.text = texto_obstaculos
+	var modo: String = String(d.get("modo", ""))
+	if modo != "":
+		_aplicar_icone_trofeu(modo)
+
+
+## Ícone 32×32 do modo (SC-006: desvio 0 px, asset por modo — FR-013).
+func _aplicar_icone_trofeu(modo: String) -> void:
+	var textura = _texturas_trofeu.get(modo, null)
+	for bloco in _blocos_progresso:
+		var icone: TextureRect = bloco.get("icone")
+		if icone != null:
+			icone.texture = textura
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +377,12 @@ func _construir_paineis() -> void:
 	_opcoes_gameover = _criar_opcoes(_painel_gameover, [
 		String(GameConfig.ui_strings.get("back_to_menu", "")),
 	], 170.0)
+
+	# SPEC-011 / FR-012/FR-023: bloco de progressão nos 3 painéis — nada
+	# novo em PLAYING (o bloco só vive em painéis de menu/encerramento).
+	_blocos_progresso.append(_criar_bloco_progresso(_painel_menu, 318.0))
+	_blocos_progresso.append(_criar_bloco_progresso(_painel_vitoria, 236.0))
+	_blocos_progresso.append(_criar_bloco_progresso(_painel_gameover, 236.0))
 
 	_indicador = _construir_indicador()
 
@@ -369,6 +454,35 @@ func _criar_opcoes(painel: Control, textos: Array, y: float) -> Array[Label]:
 		resultado.append(rotulo)
 	_marcar_opcoes(resultado, 0)
 	return resultado
+
+
+## Bloco de progressão (SPEC-011): ícone 32×32 + rótulos de troféus,
+## recorde, acumulada, pontuação da corrida e obstáculos — texturas/textos
+## chegam via `atualizar_painel_progresso` (contract ui_progress_display §2).
+func _criar_bloco_progresso(painel: Control, y_base: float) -> Dictionary:
+	var icone := TextureRect.new()
+	icone.position = Vector2(304.0, y_base)
+	icone.size = Vector2(32.0, 32.0)
+	icone.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icone.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	painel.add_child(icone)
+
+	var trofeus := _criar_rotulo_central(painel, "", y_base + 40.0)
+	var recorde := _criar_rotulo_central(painel, "", y_base + 62.0)
+	var acumulada := _criar_rotulo_central(painel, "", y_base + 84.0)
+	var pontuacao := _criar_rotulo_central(painel, "", y_base + 106.0)
+	var obstaculos := _criar_rotulo_central(painel, "", y_base + 128.0)
+	# Estado inicial coerente com snapshot vazio (SC-012: sem texto velho;
+	# a pontuação da corrida só aparece com valor positivo).
+	pontuacao.visible = false
+	return {
+		"icone": icone,
+		"trofeus": trofeus,
+		"recorde": recorde,
+		"acumulada": acumulada,
+		"pontuacao": pontuacao,
+		"obstaculos": obstaculos,
+	}
 
 
 func _marcar_opcoes(opcoes: Array[Label], selecionada: int) -> void:

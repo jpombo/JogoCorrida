@@ -68,6 +68,19 @@ var progresso: RaceProgression = RaceProgression.new()
 ## `_ready` — guards `if audio_manager:` em todo wiring (SC-009).
 var audio_manager: AudioManager = null
 
+## Progressão persistente (SPEC-011, FR-001…FR-011): recordes, acumulados,
+## troféus, ciclos e histórico por modo. Domínio puro (research R2); nulo
+## nos testes sintéticos que não rodam `_ready` — guards em todo wiring.
+var progress_manager: ProgressManager = null
+
+## Persistência em disco (SPEC-011, FR-021/FR-022): I/O puro de JSON —
+## gravação ÚNICA por encerramento (research R7/R9). Mesmo guard.
+var save_manager: SaveManager = null
+
+## Obstáculos de pista (SPEC-011, FR-014…FR-020): pool no padrão dos
+## galões, criado em `_ready`; nulo nos testes sintéticos (R12).
+var obstacles_layer: ObstacleManager = null
+
 ## Seleção de veículo da sessão (SPEC-008, AS2/FR-002): padrão "azul";
 ## só troca o sprite — nunca atributos (SC-001/SC-014).
 var _veiculo_selecionado: String = "azul"
@@ -103,6 +116,12 @@ func _ready() -> void:
 		"volume_colisao": GameConfig.audio_volume_colisao,
 		"categoria_caminhao": GameConfig.audio_categoria_caminhao,
 	})
+
+	# SPEC-011 / FR-021/FR-022 (research R2/R9): persistência carregada uma
+	# única vez no arranque; gravação só nos ramos de encerramento.
+	save_manager = SaveManager.new()
+	progress_manager = ProgressManager.new()
+	progress_manager.carregar_de(save_manager.carregar())
 
 	# Configurar ambiente atual
 	environment_manager.set_environment(GameConfig.current_environment_id)
@@ -176,6 +195,13 @@ func _ready() -> void:
 	if items_layer:
 		items_layer.setup()
 		items_layer.fuel_can_collected.connect(fuel_system.restaurar)
+
+	# SPEC-011 / US3: obstáculos no padrão dos galões — pool pré-criada uma
+	# única vez; o gate de disponibilidade é decidido por corrida (FR-018).
+	obstacles_layer = ObstacleManager.new()
+	add_child(obstacles_layer)
+	obstacles_layer.configurar()
+
 	if ui_root:
 		ui_root.setup(track_manager, game_state)
 		ui_root.start_race.connect(_on_start_race)
@@ -191,8 +217,18 @@ func _ready() -> void:
 	# permanecem em 1,0 — os testes legados não passam por aqui (R12).
 	dificuldade.definir_modo(String(GameConfig.difficulty_default_mode))
 	_aplicar_fatores_por_corrida()
+	# SPEC-011 / FR-018: gate de obstáculos do modo + painel de progressão
+	# já no primeiro menu (SC-010 — o menu abre com os dados restaurados).
+	if obstacles_layer and progress_manager:
+		obstacles_layer.definir_disponivel(
+			progress_manager.obstaculos_disponiveis(dificuldade.get_modo())
+		)
 	if ui_root:
-		ui_root.atualizar_modo(_rotulo_modo())
+		ui_root.atualizar_modo(_rotulo_modo(), dificuldade.get_modo())
+		if progress_manager:
+			ui_root.atualizar_painel_progresso(
+				progress_manager.snapshot(dificuldade.get_modo())
+			)
 
 	# Iniciar no MENU
 	game_state.reset()
@@ -329,6 +365,17 @@ func _processar_playing(delta: float) -> void:
 			player_vehicle
 		)
 
+	# 3½. Obstáculos (SPEC-011, research R6): movimento, detecção AABB e
+	# geração no padrão dos galões — atrás dos NPCs e antes do consumo.
+	if obstacles_layer and road:
+		obstacles_layer.update(
+			delta,
+			road,
+			traffic_layer.active_vehicles_snapshot if traffic_layer else [],
+			track_manager,
+			player_vehicle
+		)
+
 	# 4. Combustível (consumo após a restauração do quadro)
 	if fuel_system and player_vehicle:
 		fuel_system.update(delta, player_vehicle.get_speed())
@@ -372,10 +419,31 @@ func _avaliar_transicoes() -> void:
 		# após qualquer encerramento (idempotente; largada/menu já limpam).
 		if items_layer:
 			items_layer.reset()
+		# T040 / FR-023: obstáculos acompanham os galões no encerramento —
+		# 0 sprites residuais atrás dos painéis de vitória/Fim de Jogo.
+		if obstacles_layer:
+			obstacles_layer.reset()
+		# SPEC-011 / FR-008, research R7: o ambiente da corrida é capturado
+		# ANTES do avanço — o troféu marca o ambiente VENCIDO, não o próximo.
+		var ambiente_vencido: String = progresso.ambiente_atual()
 		# SPEC-009 / FR-019: o avanço de fase é registrado ANTES da vitória
 		# — `_on_continue_next_phase` consome o estado já avançado
 		# (environment_cycle.md §2).
 		progresso.registra_vitoria()
+		# SPEC-011 / US1: pontuação → recorde → gravação ÚNICA, sempre
+		# antes do emit e da virada de estado (SC-003, contracts/
+		# progress_manager_api.md §3). Guards para testes sintéticos (R12).
+		if progress_manager:
+			var snapshot_vitoria: Dictionary = progress_manager.processar_vitoria(
+				dificuldade.get_modo() if dificuldade else "normal",
+				ambiente_vencido,
+				minf(track_manager.get_percorrida(), GameConfig.track_total_distance),
+				fuel_system.get_perda_colisao_corrida()
+			)
+			if save_manager:
+				save_manager.gravar(progress_manager.dados_para_salvar())
+			if ui_root:
+				ui_root.atualizar_painel_progresso(snapshot_vitoria)
 		race_won.emit()
 		game_state.victory()
 		return
@@ -383,9 +451,23 @@ func _avaliar_transicoes() -> void:
 			and player_vehicle.get_speed() <= 0.0:
 		if items_layer:
 			items_layer.reset()
+		# T040 / FR-023: mesmos obstáculos limpos na derrota (idempotente).
+		if obstacles_layer:
+			obstacles_layer.reset()
 		# SPEC-009 / FR-023: derrota recomeça por PLAINS com ciclos
 		# preservados (mesmo ponto de transição, environment_cycle.md §2).
 		progresso.zerar_ciclo_por_derrota()
+		# SPEC-011 / Q1-A + Q2-B: a derrota zera o CICLO de troféus do modo
+		# (total preservado) e NÃO registra resultado — save 1× só com o
+		# ciclo zerado (contracts/progress_manager_api.md §2).
+		if progress_manager:
+			var snapshot_derrota: Dictionary = progress_manager.processar_derrota(
+				dificuldade.get_modo() if dificuldade else "normal"
+			)
+			if save_manager:
+				save_manager.gravar(progress_manager.dados_para_salvar())
+			if ui_root:
+				ui_root.atualizar_painel_progresso(snapshot_derrota)
 		race_lost.emit()
 		game_state.game_over()
 
@@ -410,6 +492,15 @@ func _reset_corrida() -> void:
 
 	if items_layer:
 		items_layer.reset()
+
+	# SPEC-011 / FR-018: obstáculos limpos na largada e gate redefinido pelo
+	# modo vigente (desbloqueio derivado do progresso persistido — FR-019).
+	if obstacles_layer:
+		obstacles_layer.reset()
+		if progress_manager and dificuldade:
+			obstacles_layer.definir_disponivel(
+				progress_manager.obstaculos_disponiveis(dificuldade.get_modo())
+			)
 
 	if player_vehicle:
 		player_vehicle.reset()
@@ -479,7 +570,13 @@ func _on_select_next_mode() -> void:
 		return
 	dificuldade.ciclar_modo()
 	if ui_root:
-		ui_root.atualizar_modo(_rotulo_modo())
+		# SPEC-011 / SC-006 (US2 AS7): a troca de modo atualiza linha "Modo",
+		# ícone de troféu e o bloco de progresso JUNTOS — zero mistura.
+		ui_root.atualizar_modo(_rotulo_modo(), dificuldade.get_modo())
+		if progress_manager:
+			ui_root.atualizar_painel_progresso(
+				progress_manager.snapshot(dificuldade.get_modo())
+			)
 
 
 ## Rótulo pt-BR do modo vigente, 100% de GameConfig.ui_strings (§VI).
@@ -524,6 +621,10 @@ func _on_go_to_menu() -> void:
 		track_layer.reset()
 	if items_layer:
 		items_layer.reset()
+	# T040 / FR-023 + US4 AS9: a ida ao menu limpa obstáculos junto com os
+	# galões — sem sprite flutuando sobre o fundo do menu.
+	if obstacles_layer:
+		obstacles_layer.reset()
 	if player_vehicle:
 		player_vehicle.reset()
 	if traffic_layer:
@@ -581,6 +682,16 @@ func _show_menu() -> void:
 		track_layer.visible = false
 	if items_layer:
 		items_layer.visible = false
+	# T040 / FR-023: mesmos obstáculos escondidos no menu (nenhum resíduo
+	# da corrida anterior visível sobre o fundo).
+	if obstacles_layer:
+		obstacles_layer.visible = false
+	# SPEC-011 / FR-023: o menu mostra o estado persistido corrente —
+	# recordes/acumulada/troféus/desbloqueio do modo selecionado.
+	if progress_manager and ui_root:
+		ui_root.atualizar_painel_progresso(
+			progress_manager.snapshot(dificuldade.get_modo() if dificuldade else "normal")
+		)
 
 func _show_ready() -> void:
 	if road:
@@ -599,6 +710,10 @@ func _show_ready() -> void:
 			)
 	if items_layer:
 		items_layer.visible = true
+	# T040 / FR-023: obstáculos voltam a ser vistos no READY (a largada
+	# resetou o pool e reabriu o gate pelo modo vigente).
+	if obstacles_layer:
+		obstacles_layer.visible = true
 
 func _show_playing() -> void:
 	# Marca o quadro da entrada para a guarda do ESC em `_processar_playing`.

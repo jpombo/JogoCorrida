@@ -526,6 +526,14 @@ var ui_strings: Dictionary = {
 	"mode_normal": "Normal",
 	"mode_challenge": "Desafio",
 	"continue_next_phase": "Continuar próxima fase",
+	# SPEC-011 / FR-023, contracts/ui_progress_display.md §3 — bloco de
+	# progressão exibido no menu e nas telas de vitória/Fim de Jogo.
+	"victory_score": "Pontuação: %.1f",
+	"record_label": "Recorde",
+	"accumulated_label": "Acumulada",
+	"trophy_format": "%d troféus — Próximo: %d/4 ambientes",
+	"obstacles_available": "Obstáculos: disponíveis",
+	"obstacles_locked": "Obstáculos: bloqueados",
 }
 
 # ---------------------------------------------------------------------------
@@ -609,3 +617,63 @@ var difficulty_modes: Dictionary = {
 ## `TrafficData.id` que recebe AUD-002; vazio ⇒ nenhum vira caminhão (todos
 ## AUD-003 — default seguro do componente, api §2).
 @export var audio_categoria_caminhao: String = "caminhao"
+
+# ---------------------------------------------------------------------------
+# SPEC-011 — Recordes, Persistência, Troféus, Pontuação e Obstáculos
+# ---------------------------------------------------------------------------
+# Sementes de CALIBRAÇÃO (research R13, FR-026): pesos da pontuação, efeitos
+# de poça/cascalho, distribuição dos obstáculos, caminhos de assets e o
+# arquivo de persistência. Quickstart §5 ajusta SÓ aqui, nunca na lógica.
+
+## Pontos por km percorrido (FR-005: conversão da medida única da pista).
+@export var score_peso_distancia: float = 100.0
+
+## Pontos por troféu do modo no momento do encerramento (FR-006).
+@export var score_peso_trofeu: float = 500.0
+
+## Penalidade por unidade de combustível perdida em colisão (FR-007).
+@export var score_peso_penalidade: float = 10.0
+
+## Teto do histórico de resultados persistido (§VII — crescimento limitado).
+@export var score_historico_max: int = 50
+
+## Poça (SPEC-011, FR-014 ajustado no aceite T032): ao ser atingida o carro
+## é DESVIADO lateralmente por esta distância (meio carro = 22/2 px) —
+## lado pela posição do impacto; a poça permanece inerte na pista até sair
+## da tela. Sem efeito de aderência.
+@export var poca_desvio_lateral: float = 11.0
+
+## Cascalho (FR-015): teto de velocidade × fator, duração e estabilidade
+## opcional (1,0 = desligada — Deferred da spec; só calibração liga).
+@export var cascalho_velocidade_fator: float = 0.6
+@export var cascalho_duracao: float = 1.2
+@export var cascalho_aderencia_fator: float = 1.0
+
+## Distribuição dos obstáculos (FR-017): frequência constante entre modos
+## (research R6), offsets/espacamentos espelhando os galões, pesos do sorteio.
+@export var obstaculo_intervalo_km: float = 0.5
+@export var obstaculo_max_ativos: int = 3
+@export var obstaculo_min_spacing: float = 120.0
+@export var obstaculo_npc_spacing: float = 24.0
+@export var obstaculo_start_offset_km: float = 0.15
+@export var obstaculo_finish_offset_km: float = 0.25
+@export var obstaculo_peso_poca: int = 50
+@export var obstaculo_peso_cascalho: int = 50
+
+## Assets (FR-013): associação centralizada modo → ícone de troféu 32×32.
+var trofeu_assets: Dictionary = {
+	"relaxing": "res://assets/trofeus/trofeu-relaxante.png",
+	"normal": "res://assets/trofeus/trofeu-normal.png",
+	"challenge": "res://assets/trofeus/trofeu-desafio.png",
+}
+
+## Sprites e áreas de ativação dos obstáculos (FR-014/FR-015: aparência =
+## ativação — dimensões lidas dos PNGs reais, 48×35 e 48×27).
+@export var obstaculo_poca_path: String = "res://assets/obstaculos/poca.png"
+@export var obstaculo_cascalho_path: String = "res://assets/obstaculos/cascalho.png"
+@export var obstaculo_tamanho_poca: Vector2 = Vector2(48.0, 35.0)
+@export var obstaculo_tamanho_cascalho: Vector2 = Vector2(48.0, 27.0)
+
+## Arquivo de persistência (FR-022): `user://` é a localização canônica de
+## dados do usuário no Godot; testes injetam caminho próprio (research R2).
+@export var save_arquivo: String = "user://progresso.json"
