@@ -39,6 +39,26 @@ var _jogador_acelerando: bool = false
 
 var _configurado: bool = false
 
+## Estado lógico do áudio geral (SPEC-012, FR-002/FR-003; research R2):
+## espelho do mute do bus Master para `geral_ativo()` — o mixer é a
+## autoridade física (bus 0 sempre existe e cobre TODOS os sons, inclusive
+## os futuros).
+var _geral_ativo: bool = true
+
+
+## Mute central de todo o áudio (SPEC-012 / FR-002): um único caminho no
+## bus Master (`AudioServer.set_bus_mute(0, ...)`) — efeitos, motores,
+## colisões e qualquer som futuro herdam o estado sem tocar nas pools, nas
+## vozes ou no ciclo de vida dos efeitos (contracts settings_menu §1).
+## Idempotente; sem `_process`, sem `configurar()` obrigatório.
+func set_geral_ativo(ativo: bool) -> void:
+	_geral_ativo = ativo
+	AudioServer.set_bus_mute(0, not ativo)
+
+
+func geral_ativo() -> bool:
+	return _geral_ativo
+
 
 ## Ciclo de vida — idempotente; chaves ausentes/inválidas ganham defaults
 ## seguros (falha segura, api §2). Cria as pools e carrega os 3 streams.

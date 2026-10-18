@@ -534,6 +534,16 @@ var ui_strings: Dictionary = {
 	"trophy_format": "%d troféus — Próximo: %d/4 ambientes",
 	"obstacles_available": "Obstáculos: disponíveis",
 	"obstacles_locked": "Obstáculos: bloqueados",
+	# SPEC-012 / contracts/settings_menu_commands.md §4 — menu de
+	# configurações (linha "Configurações" + painel com Áudio/Resolução).
+	"settings": "Configurações",
+	"settings_title": "Configurações",
+	"audio_label": "Áudio",
+	"audio_on": "Ligado",
+	"audio_off": "Desativado",
+	"resolution_label": "Resolução",
+	"resolution_640": "640 × 480",
+	"resolution_1024": "1024 × 768",
 }
 
 # ---------------------------------------------------------------------------
@@ -677,3 +687,41 @@ var trofeu_assets: Dictionary = {
 ## Arquivo de persistência (FR-022): `user://` é a localização canônica de
 ## dados do usuário no Godot; testes injetam caminho próprio (research R2).
 @export var save_arquivo: String = "user://progresso.json"
+
+# ---------------------------------------------------------------------------
+# SPEC-012 — Preferências e Demonstração do Menu
+# ---------------------------------------------------------------------------
+# Sementes de CALIBRAÇÃO (research R8, FR-022): tudo que o PreferencesManager
+# e o MenuDemo leem vive neste bloco (constitution §IV). Quickstart §5 ajusta
+# SÓ aqui, nunca na lógica.
+
+## Preferências — arquivo separado de `user://progresso.json` (Clarificação
+## Q1, FR-010): o SaveManager é instanciado com este caminho (research R1).
+@export var preferencias_arquivo: String = "user://preferencias.json"
+
+## Default do áudio geral: ligado (RF-001.8).
+@export var preferencias_padrao_audio: bool = true
+
+## Conjunto VÁLIDO de resoluções (FR-004) — alternância da UI só usa valores
+## daqui; `definir_resolucao` fora da lista é no-op total (contracts/
+## preferences_manager_api.md §2).
+@export var preferencias_resolucoes: Array[Vector2i] = [
+	Vector2i(640, 480),
+	Vector2i(1024, 768),
+]
+
+## Default = resolução atual do projeto (RF-002.6).
+@export var preferencias_resolucao_padrao: Vector2i = Vector2i(640, 480)
+
+## Demonstração do menu (research R8): duração de cada ambiente na faixa
+## 8–12 s da spec, fades de 0,5–1 s, pool/limite de NPCs, intervalo de
+## reposição, velocidade de cruzeiro fixa (Normal 100 × 3,0) e véu de
+## legibilidade atrás dos textos.
+@export var demo_duracao_ambiente: float = 10.0
+@export var demo_fade_escurecer: float = 0.75
+@export var demo_fade_clarear: float = 0.75
+@export var demo_npc_max: int = 4
+@export var demo_npc_intervalo: float = 0.8
+@export var demo_spawn_tentativas: int = 12
+@export var demo_velocidade: float = 300.0
+@export var demo_ui_scrim_alpha: float = 0.3

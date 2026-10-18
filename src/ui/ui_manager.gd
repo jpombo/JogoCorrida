@@ -15,6 +15,13 @@ signal restart_race
 signal continue_next_phase
 signal go_to_menu
 
+# SPEC-012 (contracts/settings_menu_commands.md §1): a UI só exibe e emite —
+# persistência/aplicação das preferências são do GameplayManager.
+signal open_settings
+signal close_settings
+signal settings_audio_alterado(ativo: bool)
+signal settings_resolucao_alterada(resolucao: Vector2i)
+
 var track_manager: TrackManager = null
 var game_state: Node = null
 
@@ -28,8 +35,10 @@ var _rotulo_titulo: Label = null
 var _rotulo_selecao: Label = null
 var _nome_veiculo: Label = null
 var _rotulo_modo: Label = null
+var _rotulo_configuracoes: Label = null
 var _rotulo_iniciar: Label = null
 var _destaque_menu: ColorRect = null
+var _opcoes_menu: Array[Label] = []
 var _opcoes_pausa: Array[Label] = []
 var _opcoes_vitoria: Array[Label] = []
 var _opcoes_gameover: Array[Label] = []
@@ -37,11 +46,29 @@ var _rotulo_distancia: Label = null
 var _barra_fundo: ColorRect = null
 var _barra: ColorRect = null
 
+# Painel de configurações (SPEC-012, RF-001/RF-002).
+var _painel_configuracoes: Control = null
+var _opcoes_config: Array[Label] = []
+
+## Véu de legibilidade (SPEC-012, RF-010, contract settings_menu §5): ColorRect
+## tela cheia, primeiro filho do root da UI — atrás dos textos, acima da
+## demonstração de fundo; visível só nas telas do menu/configurações.
+var _fundo_menu: ColorRect = null
+
 var _opcao_pausa: int = 0
 var _opcao_vitoria: int = 0
 var _opcao_gameover: int = 0
 var _opcao_menu: int = 0
+var _opcao_config: int = 0
+var _configuracoes_aberto: bool = false
 var _veiculo_indice: int = 0
+
+# Espelho exibido das preferências — somente leitura: os valores vêm do
+# PreferencesManager no `setup` e as trocas saem por sinais; quem persiste e
+# quem re-injeta é o GameplayManager (contracts settings §1 e
+# preferences_manager_api §3).
+var _audio_ativo: bool = GameConfig.preferencias_padrao_audio
+var _resolucao: Vector2i = GameConfig.preferencias_resolucao_padrao
 
 ## Bloco de progressão (SPEC-011, FR-012/FR-023; contracts/
 ## ui_progress_display.md): um conjunto por painel (menu/vitória/game over),
@@ -74,9 +101,23 @@ func _carregar_texturas_trofeu() -> void:
 
 ## Liga o observador aos modelos. Idempotente (H4): reconectar no mesmo par é
 ## no-op — o reset de corrida NUNCA reconecta (SC-012, research R10).
-func setup(p_track: TrackManager, p_state: Node) -> void:
+## SPEC-012 / contract §3: o 3º parâmetro é opcional para preservar as
+## chamadas legadas de 2 argumentos (R9); sem preferências, o painel de
+## configurações usa os defaults do GameConfig.
+func setup(
+	p_track: TrackManager,
+	p_state: Node,
+	p_preferencias: PreferencesManager = null
+) -> void:
 	track_manager = p_track
 	game_state = p_state
+	if p_preferencias != null:
+		_audio_ativo = p_preferencias.audio_ativo
+		_resolucao = p_preferencias.resolucao
+	else:
+		_audio_ativo = GameConfig.preferencias_padrao_audio
+		_resolucao = GameConfig.preferencias_resolucao_padrao
+	_atualizar_linhas_config()
 	if track_manager != null and not track_manager.progress_changed.is_connected(_on_progress_changed):
 		track_manager.progress_changed.connect(_on_progress_changed)
 	if game_state != null and not game_state.state_changed.is_connected(_on_state_changed):
@@ -93,7 +134,12 @@ func _process(_delta: float) -> void:
 		return
 	match game_state.current_state:
 		game_state.State.MENU:
-			_process_menu()
+			# SPEC-012: o painel de configurações vive dentro do estado MENU —
+			# aberto, ele consome a navegação no lugar do menu principal.
+			if _configuracoes_aberto:
+				_process_configuracoes()
+			else:
+				_process_menu()
 		game_state.State.PAUSED:
 			_process_pausa()
 		game_state.State.VICTORY:
@@ -102,14 +148,15 @@ func _process(_delta: float) -> void:
 			_process_fim_gameover()
 
 
-## Menu de 3 linhas (SPEC-009, FR-016, contracts/ui_commands.md §1):
-## 0 = seleção de veículo, 1 = modo, 2 = iniciar corrida.
+## Menu de 4 linhas (SPEC-009 FR-016 + SPEC-012 FR-001, contract
+## settings_menu §2): 0 = seleção de veículo, 1 = modo, 2 = configurações
+## (abre o painel), 3 = iniciar corrida.
 func _process_menu() -> void:
 	if Input.is_action_just_pressed("ui_up"):
-		_opcao_menu = wrapi(_opcao_menu - 1, 0, 3)
+		_opcao_menu = wrapi(_opcao_menu - 1, 0, 4)
 		_posicionar_destaque_menu()
 	if Input.is_action_just_pressed("ui_down"):
-		_opcao_menu = wrapi(_opcao_menu + 1, 0, 3)
+		_opcao_menu = wrapi(_opcao_menu + 1, 0, 4)
 		_posicionar_destaque_menu()
 	if Input.is_action_just_pressed("ui_left") or Input.is_action_just_pressed("ui_right"):
 		_veiculo_indice = 1 - _veiculo_indice
@@ -123,8 +170,100 @@ func _process_menu() -> void:
 				select_next_vehicle.emit()
 			1:
 				select_next_mode.emit()
+			2:
+				_abrir_configuracoes()
 			_:
 				start_race.emit()
+
+
+## Painel de configurações (SPEC-012, contract settings_menu §3): 3 linhas —
+## 0 = áudio, 1 = resolução (ui_left/ui_right/ui_accept alternam), 2 =
+## "Voltar ao menu" (ui_accept/ui_cancel fecham). O painel só exibe e emite.
+func _process_configuracoes() -> void:
+	if Input.is_action_just_pressed("ui_up"):
+		_opcao_config = wrapi(_opcao_config - 1, 0, 3)
+		_marcar_opcoes(_opcoes_config, _opcao_config)
+	if Input.is_action_just_pressed("ui_down"):
+		_opcao_config = wrapi(_opcao_config + 1, 0, 3)
+		_marcar_opcoes(_opcoes_config, _opcao_config)
+	if Input.is_action_just_pressed("ui_cancel"):
+		_fechar_configuracoes()
+		return
+	if Input.is_action_just_pressed("ui_accept"):
+		match _opcao_config:
+			0:
+				_alternar_audio()
+			1:
+				_alternar_resolucao()
+			_:
+				_fechar_configuracoes()
+	if Input.is_action_just_pressed("ui_left") or Input.is_action_just_pressed("ui_right"):
+		match _opcao_config:
+			0:
+				_alternar_audio()
+			1:
+				_alternar_resolucao()
+
+
+## Abre/fecha o painel: o menu principal sai de cena (sem duplo fundo) e os
+## sinais orientam o GameplayManager a pausar/retomar a demonstração (RF-009).
+func _abrir_configuracoes() -> void:
+	_configuracoes_aberto = true
+	_opcao_config = 0
+	_marcar_opcoes(_opcoes_config, _opcao_config)
+	_painel_menu.visible = false
+	_painel_configuracoes.visible = true
+	open_settings.emit()
+
+
+func _fechar_configuracoes() -> void:
+	_configuracoes_aberto = false
+	_painel_configuracoes.visible = false
+	_painel_menu.visible = true
+	close_settings.emit()
+
+
+func _alternar_audio() -> void:
+	_audio_ativo = not _audio_ativo
+	_atualizar_linhas_config()
+	settings_audio_alterado.emit(_audio_ativo)
+
+
+func _alternar_resolucao() -> void:
+	var lista: Array[Vector2i] = GameConfig.preferencias_resolucoes
+	var indice := lista.find(_resolucao)
+	_resolucao = lista[wrapi(indice + 1, 0, lista.size())]
+	_atualizar_linhas_config()
+	settings_resolucao_alterada.emit(_resolucao)
+
+
+## Reescreve as linhas de áudio/resolução a partir do espelho corrente
+## (chamado no `setup` e após cada alternância).
+func _atualizar_linhas_config() -> void:
+	if _opcoes_config.size() >= 2:
+		_opcoes_config[0].text = _texto_linha_audio()
+		_opcoes_config[1].text = _texto_linha_resolucao()
+
+
+func _texto_linha_audio() -> String:
+	var chave := "audio_on" if _audio_ativo else "audio_off"
+	return "%s: %s" % [
+		String(GameConfig.ui_strings.get("audio_label", "")),
+		String(GameConfig.ui_strings.get(chave, "")),
+	]
+
+
+func _texto_linha_resolucao() -> String:
+	var rotulo := String(GameConfig.ui_strings.get("resolution_label", ""))
+	# Específica para o conjunto válido do GameConfig (T026: sem resolução
+	# literal no código da UI) — chave "resolution_<largura>".
+	for res in GameConfig.preferencias_resolucoes:
+		if _resolucao == res:
+			return "%s: %s" % [
+				rotulo,
+				String(GameConfig.ui_strings.get("resolution_%d" % res.x, "")),
+			]
+	return "%s: %d \u00d7 %d" % [rotulo, _resolucao.x, _resolucao.y]
 
 
 func _process_pausa() -> void:
@@ -182,10 +321,17 @@ func _aplicar_estado() -> void:
 	if not _configurado or game_state == null:
 		return
 	var estado = game_state.current_state
+	# SPEC-012: o painel só existe dentro do MENU — qualquer virada fecha-o
+	# pelo caminho canônico (emite close_settings ⇒ a demo retoma).
+	if _configuracoes_aberto:
+		_fechar_configuracoes()
 	_painel_menu.visible = estado == game_state.State.MENU
 	_painel_pausa.visible = estado == game_state.State.PAUSED
 	_painel_vitoria.visible = estado == game_state.State.VICTORY
 	_painel_gameover.visible = estado == game_state.State.GAME_OVER
+	# SPEC-012 / RF-010: o véu acompanha SÓ as telas de menu — inclui o
+	# painel de configurações, que vive dentro do estado MENU.
+	_fundo_menu.visible = estado == game_state.State.MENU
 	_indicador.visible = estado != game_state.State.MENU
 	if estado == game_state.State.MENU:
 		_opcao_menu = 0
@@ -222,20 +368,24 @@ func _atualizar_nome_veiculo() -> void:
 
 
 ## Retângulo semitransparente atrás da opção ativa do menu (0 = seleção de
-## veículo com o nome; 1 = modo; 2 = iniciar corrida). Reaplica a posição a
-## cada troca.
+## veículo com o nome; 1 = modo; 2 = configurações; 3 = iniciar corrida).
+## Reaplica a posição a cada troca. SPEC-012: 4 faixas com as posições
+## mínimas para acomodar a nova linha (contract §2 — sem redesenho).
 func _posicionar_destaque_menu() -> void:
 	if _destaque_menu == null:
 		return
 	match _opcao_menu:
 		0:
-			_destaque_menu.position = Vector2(160.0, 164.0)
+			_destaque_menu.position = Vector2(160.0, 144.0)
 			_destaque_menu.size = Vector2(320.0, 66.0)
 		1:
-			_destaque_menu.position = Vector2(160.0, 244.0)
+			_destaque_menu.position = Vector2(160.0, 218.0)
+			_destaque_menu.size = Vector2(320.0, 32.0)
+		2:
+			_destaque_menu.position = Vector2(160.0, 254.0)
 			_destaque_menu.size = Vector2(320.0, 32.0)
 		_:
-			_destaque_menu.position = Vector2(160.0, 284.0)
+			_destaque_menu.position = Vector2(160.0, 290.0)
 			_destaque_menu.size = Vector2(320.0, 32.0)
 
 
@@ -319,6 +469,16 @@ func _construir_paineis() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	# SPEC-012 / RF-010 (contract §5): scrim PRIMEIRO filho do root — desenha
+	# atrás de todos os painéis/textos e acima da demo de mundo, garantindo
+	# leitura do título/opções sobre qualquer ambiente (SC-008). Alpha do
+	# GameConfig (calibração quickstart §5).
+	_fundo_menu = ColorRect.new()
+	_fundo_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fundo_menu.color = Color(0.0, 0.0, 0.0, float(GameConfig.demo_ui_scrim_alpha))
+	_fundo_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_fundo_menu)
+
 	_painel_menu = _criar_painel_fundo()
 	_destaque_menu = ColorRect.new()
 	_destaque_menu.color = Color(1.0, 1.0, 1.0, 0.18)
@@ -328,10 +488,10 @@ func _construir_paineis() -> void:
 		_painel_menu, String(GameConfig.ui_strings.get("menu_title", "")), 80.0
 	)
 	_rotulo_selecao = _criar_rotulo_central(
-		_painel_menu, String(GameConfig.ui_strings.get("select_vehicle", "")), 170.0
+		_painel_menu, String(GameConfig.ui_strings.get("select_vehicle", "")), 150.0
 	)
 	_nome_veiculo = _criar_rotulo_central(
-		_painel_menu, String(GameConfig.ui_strings.get("vehicle_blue", "")), 200.0
+		_painel_menu, String(GameConfig.ui_strings.get("vehicle_blue", "")), 180.0
 	)
 	# Linha "Modo" (SPEC-009, FR-016): o rótulo inicial é o modo padrão da
 	# config; `atualizar_modo` acompanha as trocas cicladas pelo manager.
@@ -341,11 +501,33 @@ func _construir_paineis() -> void:
 			String(GameConfig.ui_strings.get("mode_label", "")),
 			String(GameConfig.ui_strings.get("mode_normal", "")),
 		],
-		250.0
+		224.0
+	)
+	# Linha "Configurações" (SPEC-012, FR-001): índice 2 do menu de 4.
+	_rotulo_configuracoes = _criar_rotulo_central(
+		_painel_menu, String(GameConfig.ui_strings.get("settings", "")), 260.0
 	)
 	_rotulo_iniciar = _criar_rotulo_central(
-		_painel_menu, String(GameConfig.ui_strings.get("start_race", "")), 290.0
+		_painel_menu, String(GameConfig.ui_strings.get("start_race", "")), 296.0
 	)
+	_opcoes_menu = [
+		_rotulo_selecao, _rotulo_modo, _rotulo_configuracoes, _rotulo_iniciar
+	]
+
+	# Painel de configurações (SPEC-012, RF-001, contract §3): 3 linhas —
+	# áudio, resolução e "Voltar ao menu"; textos iniciais do espelho, que o
+	# `setup` realinha com o PreferencesManager recebido.
+	_painel_configuracoes = _criar_painel_fundo()
+	_criar_rotulo_central(
+		_painel_configuracoes,
+		String(GameConfig.ui_strings.get("settings_title", "")),
+		100.0
+	)
+	_opcoes_config = _criar_opcoes(_painel_configuracoes, [
+		_texto_linha_audio(),
+		_texto_linha_resolucao(),
+		String(GameConfig.ui_strings.get("back_to_menu", "")),
+	], 200.0)
 
 	_painel_pausa = _criar_painel_fundo()
 	_criar_rotulo_central(
@@ -380,7 +562,9 @@ func _construir_paineis() -> void:
 
 	# SPEC-011 / FR-012/FR-023: bloco de progressão nos 3 painéis — nada
 	# novo em PLAYING (o bloco só vive em painéis de menu/encerramento).
-	_blocos_progresso.append(_criar_bloco_progresso(_painel_menu, 318.0))
+	# SPEC-012: base do menu deslocada 318 → 326 para abrir espaço para a
+	# 4ª linha do menu (labels até y=454 + 24 ≤ 480).
+	_blocos_progresso.append(_criar_bloco_progresso(_painel_menu, 326.0))
 	_blocos_progresso.append(_criar_bloco_progresso(_painel_vitoria, 236.0))
 	_blocos_progresso.append(_criar_bloco_progresso(_painel_gameover, 236.0))
 
@@ -390,6 +574,8 @@ func _construir_paineis() -> void:
 	_painel_pausa.visible = false
 	_painel_vitoria.visible = false
 	_painel_gameover.visible = false
+	_painel_configuracoes.visible = false
+	_fundo_menu.visible = true
 	_indicador.visible = false
 	_posicionar_destaque_menu()
 

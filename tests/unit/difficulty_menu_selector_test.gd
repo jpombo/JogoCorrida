@@ -1,11 +1,15 @@
 extends GdUnitTestSuite
 
-## SPEC-009 / T031 (FR-016, FR-017, US1/AC9) — Seletor de modo no menu de 3
-## linhas: navegação `wrapi(0, 3)` com o destaque acompanhando a linha
-## (0 = veículo, 1 = modo, 2 = iniciar), rótulo inicial "Modo: Normal" (padrão
-## da config), `ui_accept` na linha 1 emite APENAS `select_next_mode` (a UI só
-## emite — o estado do modo vive no DifficultyManager, contracts/
-## ui_commands.md §1) e `atualizar_modo` reflete o novo rótulo (FR-017).
+## SPEC-009 / T031 (FR-016, FR-017, US1/AC9) — Seletor de modo no menu.
+## SPEC-012 / T007: o menu ganhou a 4ª linha "Configurações" — a adaptação
+## é a ÚNICA exceção à regra "suítes legadas sem ajuste" (plan Constraints,
+## nota R12), no mesmo precedente da SPEC-009: navegação `wrapi(0, 4)` com o
+## destaque acompanhando a linha (0 = veículo, 1 = modo, 2 = configurações,
+## 3 = iniciar), rótulo inicial "Modo: Normal" (padrão da config), `ui_accept`
+## na linha 1 emite APENAS `select_next_mode` (a UI só emite — o estado do
+## modo vive no DifficultyManager, contracts/ui_commands.md §1), na linha 2
+## emite `open_settings` e na linha 3 `start_race`, e `atualizar_modo`
+## reflete o novo rótulo (FR-017).
 
 var ui: UIManager
 var track: TrackManager
@@ -53,34 +57,36 @@ func _pressionar(acao: String) -> void:
 	await get_tree().process_frame
 
 
-## 1 — Navegação com wraparound nas 3 linhas e destaque acompanhando.
-func test_01_navegacao_wrapi_tres_linhas() -> void:
+## 1 — Navegação com wraparound nas 4 linhas e destaque acompanhando.
+func test_01_navegacao_wrapi_quatro_linhas() -> void:
 	ui._opcao_menu = 0
 	ui._posicionar_destaque_menu()
 
 	await _pressionar("ui_up")
-	assert_int(ui._opcao_menu).is_equal(2).override_failure_message(
-		"FR-016: ui_up na linha 0 não envolveu para a linha 2 (wrapi(0,3))"
+	assert_int(ui._opcao_menu).is_equal(3).override_failure_message(
+		"FR-016: ui_up na linha 0 não envolveu para a linha 3 (wrapi(0,4))"
 	)
-	assert_bool(absf(ui._destaque_menu.position.y - 284.0) < 0.5).is_true()\
+	assert_bool(absf(ui._destaque_menu.position.y - 290.0) < 0.5).is_true()\
 		.override_failure_message("FR-016: destaque não acompanhou a linha Iniciar")
 
 	await _pressionar("ui_down")
 	assert_int(ui._opcao_menu).is_equal(0).override_failure_message(
-		"FR-016: ui_down na linha 2 não envolveu para a linha 0 (wrapi(0,3))"
+		"FR-016: ui_down na linha 3 não envolveu para a linha 0 (wrapi(0,4))"
 	)
-	assert_bool(absf(ui._destaque_menu.position.y - 164.0) < 0.5).is_true()\
+	assert_bool(absf(ui._destaque_menu.position.y - 144.0) < 0.5).is_true()\
 		.override_failure_message("FR-016: destaque não voltou para a linha de veículo")
 
 	await _pressionar("ui_down")
 	assert_int(ui._opcao_menu).is_equal(1).override_failure_message(
 		"FR-016: ui_down não avançou da linha 0 para a linha 1 (Modo)"
 	)
-	assert_bool(absf(ui._destaque_menu.position.y - 244.0) < 0.5).is_true()\
+	assert_bool(absf(ui._destaque_menu.position.y - 218.0) < 0.5).is_true()\
 		.override_failure_message("FR-016: destaque não acompanhou a linha Modo")
 
 	await _pressionar("ui_down")
 	assert_int(ui._opcao_menu).is_equal(2)
+	await _pressionar("ui_down")
+	assert_int(ui._opcao_menu).is_equal(3)
 	await _pressionar("ui_down")
 	assert_int(ui._opcao_menu).is_equal(0)
 
@@ -108,8 +114,10 @@ func test_02_rotulo_modo_inicial_e_atualizacao() -> void:
 
 
 ## 3 — `ui_accept` depende da linha ativa: linha 1 emite só
-## `select_next_mode`; linha 2 emite `start_race`; linha 0 alterna veículo
-## (FR-016/US1-AC9 — seleção refletida antes da próxima corrida).
+## `select_next_mode`; linha 2 (Configurações, SPEC-012) emite
+## `open_settings` e NÃO `start_race`; linha 3 emite `start_race`; linha 0
+## alterna veículo (FR-016/US1-AC9 — seleção refletida antes da próxima
+## corrida).
 func test_03_ui_accept_depende_da_linha() -> void:
 	ui._opcao_menu = 1
 	await _pressionar("ui_accept")
@@ -123,7 +131,15 @@ func test_03_ui_accept_depende_da_linha() -> void:
 		"FR-016: ui_accept na linha Modo emitiu select_next_vehicle junto"
 	)
 
+	# SPEC-012: a linha 2 é "Configurações" — abrir config não pode iniciar
+	# corrida (o start_race migrou para a linha 3).
 	ui._opcao_menu = 2
+	await _pressionar("ui_accept")
+	assert_int(_emitidos_iniciar).is_zero().override_failure_message(
+		"SPEC-012: ui_accept em Configurações emitiu start_race (linha errada)"
+	)
+
+	ui._opcao_menu = 3
 	await _pressionar("ui_accept")
 	assert_int(_emitidos_iniciar).is_equal(1).override_failure_message(
 		"FR-016: ui_accept na linha Iniciar não emitiu start_race"

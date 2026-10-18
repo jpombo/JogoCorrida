@@ -68,6 +68,14 @@ var progresso: RaceProgression = RaceProgression.new()
 ## `_ready` — guards `if audio_manager:` em todo wiring (SC-009).
 var audio_manager: AudioManager = null
 
+## SPEC-012 / T008 (contract preferences §3): preferências de áudio/resolução,
+## carregadas 1× no arranque e aplicadas/gravadas só pelo orquestrador.
+var preferencias: PreferencesManager = null
+## SPEC-012 / US4: demonstração de corrida do menu (contract
+## menu_demo_lifecycle §3) — tipagem Variant até a classe `MenuDemo` existir;
+## guards `if menu_demo:` em todo wiring (R9).
+var menu_demo = null
+
 ## Progressão persistente (SPEC-011, FR-001…FR-011): recordes, acumulados,
 ## troféus, ciclos e histórico por modo. Domínio puro (research R2); nulo
 ## nos testes sintéticos que não rodam `_ready` — guards em todo wiring.
@@ -116,6 +124,15 @@ func _ready() -> void:
 		"volume_colisao": GameConfig.audio_volume_colisao,
 		"categoria_caminhao": GameConfig.audio_categoria_caminhao,
 	})
+
+	# SPEC-012 / T008 (contract preferences §3): preferências carregadas uma
+	# única vez no arranque; o áudio geral é aplicado logo após a criação do
+	# AudioManager. Guards preservam os testes sintéticos legados (R9).
+	preferencias = PreferencesManager.new()
+	preferencias.carregar()
+	_aplicar_resolucao(preferencias.resolucao)
+	if audio_manager:
+		audio_manager.set_geral_ativo(preferencias.audio_ativo)
 
 	# SPEC-011 / FR-021/FR-022 (research R2/R9): persistência carregada uma
 	# única vez no arranque; gravação só nos ramos de encerramento.
@@ -211,6 +228,13 @@ func _ready() -> void:
 		ui_root.continue_next_phase.connect(_on_continue_next_phase)
 		ui_root.restart_race.connect(_on_restart_race)
 		ui_root.go_to_menu.connect(_on_go_to_menu)
+		# SPEC-012 / T008: as preferências são aplicadas e persistidas pelo
+		# orquestrador — a UI só exibe e emite (contract settings §1). Os
+		# guards R9 valem para os testes que montam a árvore pela metade.
+		ui_root.settings_audio_alterado.connect(_on_settings_audio_alterado)
+		ui_root.settings_resolucao_alterada.connect(_on_settings_resolucao_alterada)
+		ui_root.open_settings.connect(_on_open_settings)
+		ui_root.close_settings.connect(_on_close_settings)
 
 	# SPEC-009: modo padrão da sessão e fatores injetados nos sistemas
 	# (contrato difficulty_manager_api.md §2). Os sistemas sem injeção
@@ -231,6 +255,13 @@ func _ready() -> void:
 			)
 
 	# Iniciar no MENU
+	# SPEC-012 / T018 (contract menu_demo_lifecycle §3): a demonstração é o
+	# ÚLTIMO nó de mundo adicionado — acima do cenário (os `_show_*` escondem
+	# road/track/items/obstacles) e abaixo do UiLayer (CanvasLayer, camada
+	# própria). Guard `if menu_demo:` em todos os pontos (R9).
+	menu_demo = MenuDemo.new()
+	add_child(menu_demo)
+
 	game_state.reset()
 	_show_menu()
 
@@ -600,6 +631,52 @@ func _on_continue_race() -> void:
 	game_state.resume_game()
 
 
+## SPEC-012 / T008 (contract preferences §3): alternância de áudio da UI —
+## persiste (PreferencesManager) e aplica (bus Master). Guards R9.
+func _on_settings_audio_alterado(ativo: bool) -> void:
+	if preferencias:
+		preferencias.definir_audio_ativo(ativo)
+	if audio_manager:
+		audio_manager.set_geral_ativo(ativo)
+
+
+## SPEC-012 / T011 (contract preferences §3/§5): troca de resolução —
+## persiste (no-op para valor inválido, já validado no domínio) e aplica na
+## janela. Guard R9.
+func _on_settings_resolucao_alterada(res: Vector2i) -> void:
+	if preferencias:
+		preferencias.definir_resolucao(res)
+	_aplicar_resolucao(res)
+
+
+## SPEC-012 / T011 (contract preferences §5, research R3): o viewport base
+## NUNCA muda (640 × 480, layout canônico) — só o tamanho da janela, com
+## recentralização; stretch=viewport + aspecto keep escala 1,0×/1,6× sem
+## distorção. Em headless (suíte) é sempre no-op; na janela embutida do
+## editor (Godot 4.4+, `Engine.is_embedded_in_editor()`) o redimensionamento
+## é impossível ("Embedded window can't be resized") — a preferência segue
+## persistida e passa a valer em janela standalone/exportada (aceite T024).
+func _aplicar_resolucao(res: Vector2i) -> void:
+	if DisplayServer.get_name() == "headless" or Engine.is_embedded_in_editor():
+		return
+	DisplayServer.window_set_size(res)
+	var tela := DisplayServer.screen_get_size(DisplayServer.window_get_current_screen())
+	DisplayServer.window_set_position((tela - res) / 2)
+
+
+## SPEC-012 / T008: abrir/fechar configurações pausa/retoma a demonstração
+## do menu sem reiniciar o ciclo (RF-009). No-op com `menu_demo` nulo —
+## o guard é permanente (testes sintéticos, R9); a criação do demo é da US4.
+func _on_open_settings() -> void:
+	if menu_demo:
+		menu_demo.pausar()
+
+
+func _on_close_settings() -> void:
+	if menu_demo:
+		menu_demo.retomar()
+
+
 func _on_restart_race() -> void:
 	# Reinício imediato (T022) + READY: a virada READY → PLAYING re-executa o
 	# reset — idempotente (R10/SC-012), a corrida nasce limpa de qualquer
@@ -692,8 +769,15 @@ func _show_menu() -> void:
 		ui_root.atualizar_painel_progresso(
 			progress_manager.snapshot(dificuldade.get_modo() if dificuldade else "normal")
 		)
+	# SPEC-012 / T018: o menu sempre nasce com a demo em PLAINS (reinício
+	# consistente — contract §3, RF-005).
+	if menu_demo:
+		menu_demo.iniciar()
 
 func _show_ready() -> void:
+	# SPEC-012 / T018: fora do menu a demo encerra (contract §3).
+	if menu_demo:
+		menu_demo.encerrar()
 	if road:
 		road.visible = true
 	if player_vehicle:
@@ -718,10 +802,14 @@ func _show_ready() -> void:
 func _show_playing() -> void:
 	# Marca o quadro da entrada para a guarda do ESC em `_processar_playing`.
 	_frame_play = Engine.get_process_frames()
+	if menu_demo:
+		menu_demo.encerrar()
 	if player_vehicle:
 		player_vehicle.set_process(true)
 
 func _show_paused() -> void:
+	if menu_demo:
+		menu_demo.encerrar()
 	if player_vehicle:
 		player_vehicle.set_process(false)
 	# FR-004 / R11: a rolagem é zerada na pausa — sem isso o Road._process
@@ -730,12 +818,16 @@ func _show_paused() -> void:
 		road.update_scroll_speed(0.0)
 
 func _show_victory() -> void:
+	if menu_demo:
+		menu_demo.encerrar()
 	if player_vehicle:
 		player_vehicle.set_process(false)
 	if road:
 		road.update_scroll_speed(0.0)
 
 func _show_game_over() -> void:
+	if menu_demo:
+		menu_demo.encerrar()
 	if player_vehicle:
 		player_vehicle.set_process(false)
 	if road:
