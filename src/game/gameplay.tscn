@@ -1,0 +1,95 @@
+[gd_scene format=3 uid="uid://c123456"]
+
+[ext_resource type="Script" uid="uid://de58ib1kqvuhm" path="res://src/game/gameplay_manager.gd" id="1_manager"]
+[ext_resource type="Script" uid="uid://ddhp5rkemgefr" path="res://src/road/road.gd" id="2_road"]
+[ext_resource type="Script" uid="uid://buskerhte4vs" path="res://src/player/player_vehicle.gd" id="3_vehicle"]
+[ext_resource type="Script" uid="uid://cdy50djgq2ukd" path="res://src/environment/background_controller.gd" id="4_background"]
+[ext_resource type="Script" path="res://src/decoration/decoration_manager.gd" id="5_decoration"]
+[ext_resource type="Script" path="res://src/traffic/traffic_manager.gd" id="6_traffic"]
+[ext_resource type="Script" path="res://src/ui/fuel_hud.gd" id="7_fuelhud"]
+[ext_resource type="Script" path="res://src/track/track_markers.gd" id="8_trackmarkers"]
+[ext_resource type="Script" path="res://src/items/fuel_can_manager.gd" id="9_fuelcans"]
+[ext_resource type="Script" path="res://src/ui/ui_manager.gd" id="10_uimanager"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_car"]
+size = Vector2(32, 48)
+
+[node name="Gameplay" type="Node2D" unique_id=1278228333]
+script = ExtResource("1_manager")
+
+[node name="BackgroundLayer" type="Node2D" parent="." unique_id=595631673]
+script = ExtResource("4_background")
+
+[node name="DecorationLayer" type="Node2D" parent="." unique_id=595631674]
+script = ExtResource("5_decoration")
+
+[node name="Road" type="Node2D" parent="." unique_id=870535707]
+script = ExtResource("2_road")
+
+[node name="TrafficLayer" type="Node2D" parent="." unique_id=870535708]
+script = ExtResource("6_traffic")
+
+[node name="PlayerVehicle" type="CharacterBody2D" parent="." unique_id=1707022647]
+script = ExtResource("3_vehicle")
+
+[node name="Sprite2D" type="Sprite2D" parent="PlayerVehicle" unique_id=1432678727]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerVehicle" unique_id=1053086396]
+shape = SubResource("RectangleShape2D_car")
+
+[node name="FuelHudLayer" type="CanvasLayer" parent="." unique_id=3017204113]
+
+[node name="FuelHudRoot" type="Control" parent="FuelHudLayer" unique_id=3017204114]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("7_fuelhud")
+
+[node name="Fundo" type="ColorRect" parent="FuelHudLayer/FuelHudRoot" unique_id=3017204115]
+layout_mode = 1
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 128.0
+offset_bottom = 18.0
+mouse_filter = 2
+color = Color(0.1, 0.1, 0.12, 0.85)
+
+[node name="Preenchimento" type="ColorRect" parent="FuelHudLayer/FuelHudRoot" unique_id=3017204116]
+layout_mode = 1
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 128.0
+offset_bottom = 18.0
+mouse_filter = 2
+color = Color(0.18, 0.72, 0.31, 1)
+
+[node name="Rotulo" type="Label" parent="FuelHudLayer/FuelHudRoot" unique_id=3017204117]
+visible = false
+layout_mode = 1
+offset_left = 8.0
+offset_top = 22.0
+offset_right = 128.0
+offset_bottom = 40.0
+mouse_filter = 2
+
+[node name="TrackLayer" type="Node2D" parent="."]
+script = ExtResource("8_trackmarkers")
+
+[node name="ItemsLayer" type="Node2D" parent="."]
+script = ExtResource("9_fuelcans")
+
+[node name="UiLayer" type="CanvasLayer" parent="."]
+
+[node name="UIManagerRoot" type="Control" parent="UiLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("10_uimanager")

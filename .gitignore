@@ -1,0 +1,35 @@
+# Godot
+.godot/
+*.import
+export.cfg
+export_presets.cfg
+
+# Relatórios gerados pelo GdUnit4 a cada execução dos testes
+reports/
+
+# Builds
+build/
+bin/
+
+# Python (tools/ — scripts de preparação de assets)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
