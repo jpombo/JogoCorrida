@@ -139,6 +139,19 @@ Projeto único Godot: `src/` e `tests/unit/` na raiz; cena única `src/game/game
 
 ---
 
+## Phase 8: Ajuste pós-implementação — demo cobrindo a corrida (2026-10-19)
+
+**Achado (relato do usuário)**: ao iniciar qualquer modo, o carro do jogador e os NPCs de corrida não apareciam — a tela parecia continuar em demonstração.
+
+**Causa**: `MenuDemo.encerrar()` parava processamento/fade/NPCs mas nunca escondia o nó; sendo o **último filho de mundo** (desenha por cima), fundo + estrada + decoração próprios cobriam `PlayerVehicle` e `TrafficLayer` em READY/PLAYING/PAUSED/VICTORY/GAME_OVER — violando RF-009 ("sem interferir na inicialização da corrida") e a premissa "vive apenas enquanto o menu principal estiver visível".
+
+- [X] T027 [US3] Corrigir a visibilidade da demo em `src/menu/menu_demo.gd`: `visible = true` no fim de `iniciar()` e `visible = false` no fim de `encerrar()` (`pausar()` mantém o nó visível — cenário congelado atrás de Configurações; `retomar()` não altera visibilidade); docstrings de `iniciar`/`pausar`/`encerrar` atualizadas
+- [X] T028 [P] [US3] Regressão em `tests/unit/menu_demo_test.gd` — `test_14_visivel_somente_no_menu`: `iniciar()` ⇒ visível; `encerrar()` ⇒ invisível (verificado **RED** com a correção removida); `pausar()`/`retomar()` ⇒ visível
+- [X] T029 Sonda headless do fluxo real (`gameplay.tscn` via `_ready` → menu → `_on_start_race` → READY → PLAYING): demo `is_visible_in_tree()=true` só no MENU e `false` em READY/PLAYING, com `player.is_visible_in_tree()=true`; suíte completa **78 suítes / 513 casos, exit 101** (512 legados + 1 novo, 0 falhas)
+- [X] T030 Sincronizar `contracts/menu_demo_lifecycle.md` (§1 API de `iniciar`/`encerrar`, §2 "Desenho" com a visibilidade) e registrar o ajuste no `AGENTS.md`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

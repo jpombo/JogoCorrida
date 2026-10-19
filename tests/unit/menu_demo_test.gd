@@ -346,6 +346,43 @@ func test_12_isolamento_de_dados_progresso_e_combustivel() -> void:
 		)
 
 
+## 14 — Regressão (RF-009: a demo "encerra imediatamente ao iniciar corrida,
+## sem interferir na inicialização da corrida"): a demo é o ÚLTIMO filho de
+## mundo e desenha ACIMA de `PlayerVehicle`/`TrafficLayer` — visível fora do
+## menu ela cobre o carro do jogador e os NPCs de corrida (o cenário parece
+## continuar em demonstração). `iniciar()` mostra, `encerrar()` esconde;
+## `pausar()` mantém visível (cenário congelado atrás de Configurações) e
+## `retomar()` continua visível.
+func test_14_visivel_somente_no_menu() -> void:
+	demo.iniciar()
+	assert_bool(demo.visible).is_true().override_failure_message(
+		"iniciar() não mostrou a demo"
+	)
+
+	demo.encerrar()
+	assert_bool(demo.visible).is_false().override_failure_message(
+		"RF-009: encerrar() não escondeu a demo — ela cobre o jogador e o "
+			+ "trânsito da corrida"
+	)
+
+	demo.iniciar()
+	demo.set_process(false)
+	demo.pausar()
+	assert_bool(demo.visible).is_true().override_failure_message(
+		"pausar() escondeu a demo (Configurações deve abrir sobre o cenário congelado)"
+	)
+
+	demo.retomar()
+	assert_bool(demo.visible).is_true().override_failure_message(
+		"retomar() não manteve a demo visível"
+	)
+
+	demo.encerrar()
+	assert_bool(demo.visible).is_false().override_failure_message(
+		"segundo encerrar() deixou a demo visível"
+	)
+
+
 ## Primeiro NPC ativo da pool (para observação direta nos testes).
 func _primeiro_ativo() -> TrafficVehicle:
 	for veiculo in demo._pool:

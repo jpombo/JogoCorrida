@@ -9,11 +9,14 @@ class_name MenuDemo
 extends Node2D
 
 func iniciar() -> void     # reinício consistente: encerra estado anterior, ambiente PLAINS,
-                           # pool limpa (≤ demo_npc_max), fade alpha 0, _process = true
-func pausar() -> void      # EXECUTANDO ⇒ PAUSADA: mata tween + alpha 0, _process = false
+                           # pool limpa (≤ demo_npc_max), fade alpha 0, _process = true,
+                           # `visible = true`
+func pausar() -> void      # EXECUTANDO ⇒ PAUSADA: mata tween + alpha 0, _process = false;
+                           # nó CONTINUA visível (Configurações abre sobre o cenário congelado)
 func retomar() -> void     # PAUSADA ⇒ EXECUTANDO: retoma ambiente/tempo pausados
+                           # (não altera visibilidade)
 func encerrar() -> void    # de qualquer estado ⇒ PARADA: mata tween + alpha 0, recicla NPCs,
-                           # zera rolagem, _process = false; idempotente
+                           # zera rolagem, _process = false, `visible = false`; idempotente
 
 func esta_ativo() -> bool          # true só em EXECUTANDO
 func ambiente_atual() -> String    # id canônico da sequência ("PLAINS"…), leitura
@@ -28,6 +31,7 @@ func npc_ativos() -> int           # veículos da pool atualmente ativos
 - **Isolamento absoluto** (FR-013/FR-018): nunca escreve `GameConfig.current_environment_id`; nunca chama `AudioManager`, combustível, pontuação, progresso, troféus, recordes ou colisão; nunca lê dificuldade.
 - **Sem áudio**: a demo não emite sinais de spawn para o orquestrador (os forwards de áudio são exclusivos do `TrafficManager` de corrida) — menu silencioso (Restrições da spec).
 - **Desenho**: filho adicionado como **último nó de mundo** do `Gameplay` — acima do cenário de gameplay, abaixo do `UiLayer` (`CanvasLayer`), portanto nunca cobre a interface. **Ordem interna dos filhos espelha o `gameplay.tscn`** — `Background` → `Decoration` → `Road` → NPCs → fade (regressão do aceite T024: Road antes do fundo escondia o asfalto `estrada_2_vias.png` atrás do background; coberta por `menu_demo_test.gd` test_13).
+- **Visibilidade** (RF-009 — "sem interferir na inicialização da corrida"; spec: a demo "vive apenas enquanto o menu principal estiver visível"): como o nó é o último de mundo, fundo/estrada/decoração próprios desenham **por cima** de `PlayerVehicle` e `TrafficLayer`. Por isso `iniciar()` força `visible = true` e `encerrar()` força `visible = false` — fora do menu a demo some da tela (parada, sem NPCs e agora sem cenário sobreposto); `pausar()`/`retomar()` mantêm a visibilidade (cenário congelado atrás de Configurações). Coberta por `menu_demo_test.gd` test_14 + sonda do fluxo real (menu visível; READY/PLAYING sem demo).
 
 ## 3. Pontos de chamada (GameplayManager)
 

@@ -68,7 +68,8 @@ func npc_ativos() -> int:
 
 ## Reinício consistente (contract §1): encerra o estado anterior, garante
 ## PLAINS (índice 0), zera cronômetros/fade, recicla NPCs, religa o
-## processamento. Idempotente.
+## processamento e VOLTA A SER VISIBLE — a demo é o último nó de mundo e,
+## escondida, deixaria a corrida sem cenário no menu. Idempotente.
 func iniciar() -> void:
 	encerrar()
 	_ensure_estrutura()
@@ -87,10 +88,12 @@ func iniciar() -> void:
 	_estrada.set_process(true)
 	_estado = Estado.EXECUTANDO
 	set_process(true)
+	visible = true
 
 
 ## EXECUTANDO ⇒ PAUSADA (contract §1): mata o tween, força alpha 0 (SC-005)
-## e congela TODO o movimento (processamento próprio e o da estrada).
+## e congela TODO o movimento (processamento próprio e da estrada). O nó
+## continua VISIBLE — Configurações abre sobre o cenário congelado (RF-009).
 func pausar() -> void:
 	if _estado != Estado.EXECUTANDO:
 		return
@@ -116,8 +119,12 @@ func retomar() -> void:
 
 
 ## De qualquer estado ⇒ PARADA (contract §1): mata o tween + alpha 0
-## (SC-005), recicla NPCs, zera a rolagem da estrada e desliga o
-## processamento. Idempotente.
+## (SC-005), recicla NPCs, zera a rolagem da estrada, desliga o
+## processamento e some da tela. Idempotente.
+## O `visible = false` é o que cumpre RF-009 ("sem interferir na
+## inicialização da corrida"): sendo o último nó de mundo, a demo desenha
+## fundo/estrada/decoração ACIMA do PlayerVehicle e do TrafficLayer —
+## visível, ela escondia o carro do jogador e os NPCs em QUALQUER modo.
 func encerrar() -> void:
 	_matar_tween()
 	if _fade_rect != null:
@@ -128,6 +135,7 @@ func encerrar() -> void:
 		_estrada.set_process(false)
 	_estado = Estado.PARADA
 	set_process(false)
+	visible = false
 
 
 ## Avanço do tempo (contracts §2): rolamento/fundo/decoração/NPCs seguem com
